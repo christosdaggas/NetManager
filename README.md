@@ -31,6 +31,7 @@ somewhere.
 - **Scripts**: run your own scripts before or after a profile is applied, optionally sandboxed
 - **Privacy**: your profiles are stored only on your computer, optionally encrypted with a passphrase
 - **Dashboard**: see your current connection at a glance
+- **Network scanner**: discover devices on your LAN with names, MAC vendors, open services, Wake-on-LAN, and CSV export
 - Follows your GNOME light or dark style
 
 ## Install on Fedora
@@ -68,8 +69,9 @@ To build your own RPM package, run `./scripts/package-rpm.sh`. The package is sa
 The app checks GitHub once at startup to see if a newer version is available
 and shows a small notice if there is one. Connection checks ping 8.8.8.8 (the
 watchdog target can be changed in Settings), and the optional speed test
-downloads a file from Cloudflare. The app does not collect or send any
-personal data.
+downloads a file from Cloudflare. The network scanner sends pings and port
+probes only to the address range you choose. The app does not collect or send
+any personal data.
 
 ## Feedback and contributing
 

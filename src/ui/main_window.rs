@@ -20,8 +20,10 @@ use std::sync::Arc;
 use crate::application::Application;
 use crate::models::Profile;
 use crate::storage::DataStore;
-use crate::ui::pages::{DashboardPage, HelpPage, LogsPage, ProfilesPage, SettingsPage};
 use crate::ui::dialog_window;
+use crate::ui::pages::{
+    DashboardPage, HelpPage, LogsPage, ProfilesPage, ScannerPage, SettingsPage,
+};
 use crate::{ntr, tr};
 
 /// Navigation items for the sidebar.
@@ -29,6 +31,7 @@ use crate::{ntr, tr};
 pub enum NavItem {
     Dashboard,
     Profiles,
+    Scanner,
     Logs,
     Settings,
     Help,
@@ -39,6 +42,7 @@ impl NavItem {
         match self {
             Self::Dashboard => "view-grid-symbolic",
             Self::Profiles => "contact-new-symbolic",
+            Self::Scanner => "system-search-symbolic",
             Self::Logs => "document-properties-symbolic",
             Self::Settings => "preferences-system-symbolic",
             Self::Help => "help-about-symbolic",
@@ -49,6 +53,7 @@ impl NavItem {
         match self {
             Self::Dashboard => tr("Dashboard"),
             Self::Profiles => tr("Profiles"),
+            Self::Scanner => tr("Scanner"),
             Self::Logs => tr("Logs"),
             Self::Settings => tr("Settings"),
             Self::Help => tr("Help"),
@@ -59,6 +64,7 @@ impl NavItem {
         &[
             Self::Dashboard,
             Self::Profiles,
+            Self::Scanner,
             Self::Logs,
             Self::Settings,
             Self::Help,
@@ -99,6 +105,7 @@ mod imp {
         // Views
         pub dashboard_page: RefCell<Option<DashboardPage>>,
         pub profiles_page: RefCell<Option<ProfilesPage>>,
+        pub scanner_page: RefCell<Option<ScannerPage>>,
         pub logs_page: RefCell<Option<LogsPage>>,
         pub settings_page: RefCell<Option<SettingsPage>>,
         pub help_page: RefCell<Option<HelpPage>>,
@@ -449,12 +456,14 @@ impl MainWindow {
         // Create pages
         let dashboard_page = DashboardPage::new();
         let profiles_page = ProfilesPage::new();
+        let scanner_page = ScannerPage::new();
         let logs_page = LogsPage::new();
         let settings_page = SettingsPage::new();
         let help_page = HelpPage::new();
 
         content_stack.add_named(&dashboard_page, Some("dashboard"));
         content_stack.add_named(&profiles_page, Some("profiles"));
+        content_stack.add_named(&scanner_page, Some("scanner"));
         content_stack.add_named(&logs_page, Some("logs"));
         content_stack.add_named(&settings_page, Some("settings"));
         content_stack.add_named(&help_page, Some("help"));
@@ -487,6 +496,7 @@ impl MainWindow {
         *imp.sidebar_toggle_btn.borrow_mut() = Some(sidebar_toggle_btn);
         *imp.dashboard_page.borrow_mut() = Some(dashboard_page);
         *imp.profiles_page.borrow_mut() = Some(profiles_page);
+        *imp.scanner_page.borrow_mut() = Some(scanner_page);
         *imp.logs_page.borrow_mut() = Some(logs_page);
         *imp.settings_page.borrow_mut() = Some(settings_page);
         *imp.help_page.borrow_mut() = Some(help_page);
@@ -654,6 +664,15 @@ impl MainWindow {
         });
         self.add_action(&navigate_profiles);
 
+        let navigate_scanner = gio::SimpleAction::new("navigate-scanner", None);
+        let window_weak = self.downgrade();
+        navigate_scanner.connect_activate(move |_, _| {
+            if let Some(window) = window_weak.upgrade() {
+                window.navigate_to(NavItem::Scanner);
+            }
+        });
+        self.add_action(&navigate_scanner);
+
         let navigate_logs = gio::SimpleAction::new("navigate-logs", None);
         let window_weak = self.downgrade();
         navigate_logs.connect_activate(move |_, _| {
@@ -702,9 +721,10 @@ impl MainWindow {
         app.set_accels_for_action("win.refresh", &["<Primary>r", "F5"]);
         app.set_accels_for_action("win.navigate-dashboard", &["<Primary>1"]);
         app.set_accels_for_action("win.navigate-profiles", &["<Primary>2"]);
-        app.set_accels_for_action("win.navigate-logs", &["<Primary>3"]);
-        app.set_accels_for_action("win.navigate-settings", &["<Primary>4"]);
-        app.set_accels_for_action("win.navigate-help", &["<Primary>5", "F1"]);
+        app.set_accels_for_action("win.navigate-scanner", &["<Primary>3"]);
+        app.set_accels_for_action("win.navigate-logs", &["<Primary>4"]);
+        app.set_accels_for_action("win.navigate-settings", &["<Primary>5"]);
+        app.set_accels_for_action("win.navigate-help", &["<Primary>6", "F1"]);
     }
 
     /// Keep the shell's light/dark CSS classes aligned with libadwaita.
@@ -4287,6 +4307,7 @@ impl MainWindow {
             let page_name = match nav_item {
                 NavItem::Dashboard => "dashboard",
                 NavItem::Profiles => "profiles",
+                NavItem::Scanner => "scanner",
                 NavItem::Logs => "logs",
                 NavItem::Settings => "settings",
                 NavItem::Help => "help",
@@ -5010,6 +5031,11 @@ impl MainWindow {
                 }
                 NavItem::Profiles => {
                     self.reload_profiles_from_cache();
+                }
+                NavItem::Scanner => {
+                    if let Some(scanner) = imp.scanner_page.borrow().as_ref() {
+                        scanner.refresh();
+                    }
                 }
                 NavItem::Logs => {
                     if let Some(logs_page) = imp.logs_page.borrow().as_ref() {

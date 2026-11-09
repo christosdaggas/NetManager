@@ -685,6 +685,115 @@ popover.menu contents {
 }
 
 /* ============================================================
+ * Network Scanner
+ * ============================================================ */
+
+.scanner-controls {
+    background-color: alpha(@window_fg_color, 0.04);
+    border: 1px solid alpha(@window_fg_color, 0.07);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+
+.scanner-controls entry {
+    min-height: 30px;
+}
+
+.scanner-column-header {
+    padding: 0 8px 6px 8px;
+}
+
+.scanner-list {
+    background: transparent;
+}
+
+.scanner-list row.scanner-row {
+    padding: 6px 8px;
+    margin: 1px 0;
+    border-radius: 8px;
+    transition: background-color 140ms ease;
+}
+
+.scanner-list row.scanner-row:hover {
+    background-color: alpha(@window_fg_color, 0.06);
+}
+
+.scanner-dot {
+    border-radius: 50%;
+    min-width: 9px;
+    min-height: 9px;
+    background-color: alpha(@window_fg_color, 0.25);
+}
+
+.scanner-dot.waiting {
+    background-color: alpha(@window_fg_color, 0.18);
+}
+
+.scanner-dot.online {
+    background-color: @success_color;
+}
+
+.scanner-dot.offline {
+    background-color: alpha(@window_fg_color, 0.22);
+}
+
+.scanner-resize-handle {
+    min-width: 8px;
+    background-color: transparent;
+    border-radius: 4px;
+    box-shadow: inset -1px 0 alpha(@window_fg_color, 0.10);
+    transition: background-color 120ms ease;
+}
+
+.scanner-resize-handle:hover {
+    background-color: alpha(@accent_color, 0.22);
+    box-shadow: inset -1px 0 @accent_color;
+}
+
+.scanner-detail-hero {
+    padding: 14px;
+    border-radius: 12px;
+    background-color: alpha(@window_fg_color, 0.05);
+}
+
+.scanner-ip {
+    font-family: monospace;
+    font-size: 10pt;
+}
+
+.scanner-mac {
+    font-family: monospace;
+    font-size: 9pt;
+}
+
+.scanner-numeric {
+    font-feature-settings: "tnum";
+    font-size: 9pt;
+}
+
+.scanner-services {
+    font-size: 9pt;
+}
+
+.scanner-error {
+    color: @error_color;
+    font-size: 0.85em;
+}
+
+/* High contrast keeps the scanner panel border legible. */
+.network-manager-high-contrast .scanner-controls {
+    border-color: alpha(@window_fg_color, 0.5);
+}
+
+.network-manager-high-contrast .scanner-resize-handle {
+    box-shadow: inset -1px 0 alpha(@window_fg_color, 0.5);
+}
+
+.network-manager-high-contrast .scanner-detail-hero {
+    border: 1px solid alpha(@window_fg_color, 0.5);
+}
+
+/* ============================================================
  * Update Banner
  * ============================================================ */
 

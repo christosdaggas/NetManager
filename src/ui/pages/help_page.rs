@@ -99,6 +99,20 @@ impl HelpPage {
              connection health are updated in real-time.")
         ));
 
+        // Scanner section
+        content_box.append(&self.create_section(
+            &tr("Network Scanner"),
+            &tr("The Network Scanner finds devices on your local network. Enter a \
+             subnet (for example 192.168.1.0/24), a range (192.168.1.1-254), or a \
+             single address, then press Scan.\n\n\
+             Fast mode uses ping and the system neighbour table. Thorough mode also \
+             probes common service ports, which can find devices that ignore ping and \
+             shows services such as SSH, HTTP, SMB, Plex, or Cockpit. Results include \
+             the device name, MAC address, vendor, reply time, and open services. You \
+             can search, filter, sort, copy addresses, wake a sleeping device over the \
+             LAN, and export the list as a CSV file.")
+        ));
+
         // Profiles section
         content_box.append(&self.create_section(
             &tr("Profiles"),

@@ -9,10 +9,12 @@
 //! - Watchdog: Monitors connectivity and takes action on failure
 //! - Sandbox: Provides script execution isolation
 //! - Encryption: Profile data encryption/decryption
+//! - Scanner: Discovers hosts on the local network
 
 pub mod autoswitch;
 pub mod encryption;
 pub mod sandbox;
+pub mod scanner;
 pub mod watchdog;
 
 pub use watchdog::WatchdogService;
