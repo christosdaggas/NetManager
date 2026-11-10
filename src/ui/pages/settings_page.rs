@@ -895,8 +895,9 @@ impl SettingsPage {
 
     /// Get the profiles directory path (display only - actual profiles are in cache)
     fn get_profiles_dir() -> PathBuf {
-        dirs::config_dir()
+        dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
+            .join(".local/share/daggas")
             .join(CONFIG_DIR_NAME)
     }
 
@@ -907,8 +908,7 @@ impl SettingsPage {
 
     /// Get the logs file path (logs are stored in config directory as JSON)
     fn get_logs_dir() -> PathBuf {
-        let base = glib::user_config_dir();
-        base.join(crate::models::CONFIG_DIR_NAME)
+        Self::get_profiles_dir()
     }
 
     /// Get profile names and IDs from the profiles cache.

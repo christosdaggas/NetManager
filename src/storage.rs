@@ -128,8 +128,9 @@ pub struct DataStore {
 impl DataStore {
     /// Create a new data store with default config directory.
     pub fn new() -> Self {
-        let config_dir = dirs::config_dir()
+        let config_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
+            .join(".local/share/daggas")
             .join(CONFIG_DIR_NAME);
         Self::with_config_dir(config_dir)
     }
@@ -204,7 +205,7 @@ impl DataStore {
 
     /// Load the application configuration.
     pub fn load_config() -> Option<AppConfig> {
-        let config_dir = dirs::config_dir()?.join(CONFIG_DIR_NAME);
+        let config_dir = dirs::home_dir()?.join(".local/share/daggas").join(CONFIG_DIR_NAME);
         let settings_file = config_dir.join("settings.toml");
 
         if !settings_file.exists() {
