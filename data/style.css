@@ -685,6 +685,148 @@ popover.menu contents {
 }
 
 /* ============================================================
+ * Network Scanner
+ * ============================================================ */
+
+.scanner-controls {
+    background-color: alpha(@window_fg_color, 0.04);
+    border: 1px solid alpha(@window_fg_color, 0.07);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+
+.scanner-controls entry {
+    min-height: 30px;
+}
+
+/* The results table sits on the same quiet surface as the scan controls. */
+.scanner-table-frame {
+    background-color: alpha(@window_fg_color, 0.04);
+    border: 1px solid alpha(@window_fg_color, 0.07);
+    border-radius: 12px;
+}
+
+columnview.scanner-table,
+columnview.scanner-table > listview {
+    background: none;
+    color: inherit;
+}
+
+columnview.scanner-table > header {
+    border-bottom: 1px solid alpha(@window_fg_color, 0.07);
+}
+
+columnview.scanner-table > header > button {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/* The headers do not sort, so they do not react like buttons either. */
+columnview.scanner-table > header > button:hover,
+columnview.scanner-table > header > button:active {
+    background-color: transparent;
+}
+
+columnview.scanner-table > header > button:hover > box,
+columnview.scanner-table > header > button:active > box {
+    color: alpha(currentColor, 0.6);
+}
+
+/* Inset the first and last columns from the frame's rounded corners. */
+columnview.scanner-table > header > button:first-child,
+columnview.scanner-table > listview > row > cell:first-child {
+    padding-left: 12px;
+}
+
+columnview.scanner-table > header > button:last-child,
+columnview.scanner-table > listview > row > cell:last-child {
+    padding-right: 8px;
+}
+
+columnview.scanner-table > listview > row > cell {
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+columnview.scanner-table > listview > row {
+    transition: background-color 140ms ease;
+}
+
+columnview.scanner-table > listview > row:hover {
+    background-color: alpha(@window_fg_color, 0.06);
+}
+
+/* Compact row buttons keep the rows short enough to scan by eye. */
+columnview.scanner-table > listview > row button.flat {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+}
+
+.scanner-dot {
+    border-radius: 50%;
+    min-width: 9px;
+    min-height: 9px;
+    background-color: alpha(@window_fg_color, 0.25);
+}
+
+.scanner-dot.waiting {
+    background-color: alpha(@window_fg_color, 0.18);
+}
+
+.scanner-dot.online {
+    background-color: @success_color;
+}
+
+.scanner-dot.offline {
+    background-color: alpha(@window_fg_color, 0.22);
+}
+
+.scanner-detail-hero {
+    padding: 14px;
+    border-radius: 12px;
+    background-color: alpha(@window_fg_color, 0.05);
+}
+
+.scanner-ip {
+    font-family: monospace;
+    font-size: 10pt;
+}
+
+.scanner-mac {
+    font-family: monospace;
+    font-size: 9pt;
+}
+
+.scanner-numeric {
+    font-feature-settings: "tnum";
+    font-size: 9pt;
+}
+
+.scanner-services {
+    font-size: 9pt;
+}
+
+.scanner-error {
+    color: @error_color;
+    font-size: 0.85em;
+}
+
+/* High contrast keeps the scanner panel border legible. */
+.network-manager-high-contrast .scanner-controls {
+    border-color: alpha(@window_fg_color, 0.5);
+}
+
+.network-manager-high-contrast .scanner-table-frame,
+.network-manager-high-contrast columnview.scanner-table > header {
+    border-color: alpha(@window_fg_color, 0.5);
+}
+
+.network-manager-high-contrast .scanner-detail-hero {
+    border: 1px solid alpha(@window_fg_color, 0.5);
+}
+
+/* ============================================================
  * Update Banner
  * ============================================================ */
 
