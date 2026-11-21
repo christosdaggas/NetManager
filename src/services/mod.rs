@@ -10,9 +10,11 @@
 //! - Sandbox: Provides script execution isolation
 //! - Encryption: Profile data encryption/decryption
 //! - Scanner: Discovers hosts on the local network
+//! - Port scanner: Finds the open TCP ports of a host
 
 pub mod autoswitch;
 pub mod encryption;
+pub mod port_scanner;
 pub mod sandbox;
 pub mod scanner;
 pub mod watchdog;

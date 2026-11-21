@@ -5,8 +5,8 @@
 //! Help Page - Application documentation and guidance.
 
 use gtk4 as gtk;
-use gtk4::prelude::*;
 use gtk4::glib;
+use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
 
 use crate::tr;
@@ -92,17 +92,20 @@ impl HelpPage {
         // Dashboard section
         content_box.append(&self.create_section(
             &tr("Dashboard"),
-            &tr("The Dashboard provides an overview of your current network configuration. \
+            &tr(
+                "The Dashboard provides an overview of your current network configuration. \
              View your active network connections, IP addresses, and connection status. \
              The active profile is displayed prominently, and you can quickly switch \
              between profiles using the profile selector. Network statistics and \
-             connection health are updated in real-time.")
+             connection health are updated in real-time.",
+            ),
         ));
 
         // Scanner section
         content_box.append(&self.create_section(
             &tr("Network Scanner"),
-            &tr("The Network Scanner finds devices on your local network. Enter a \
+            &tr(
+                "The Network Scanner finds devices on your local network. Enter a \
              subnet (for example 192.168.1.0/24), a range (192.168.1.1-254), or a \
              single address, then press Scan.\n\n\
              Fast mode uses ping and the system neighbour table. Thorough mode also \
@@ -110,13 +113,23 @@ impl HelpPage {
              shows services such as SSH, HTTP, SMB, Plex, or Cockpit. Results include \
              the device name, MAC address, vendor, reply time, and open services. You \
              can search, filter, sort, copy addresses, wake a sleeping device over the \
-             LAN, and export the list as a CSV file.")
+             LAN, and export the list as a CSV file.",
+            ),
+        ));
+
+        // Port scanner section
+        content_box.append(&self.create_section(
+            &tr("Port Scanner"),
+            &tr("The Port Scanner shows which TCP ports of one device accept              connections, and the service usually found on each. Enter an IP address              or host name, choose the common ports, ports 1 to 1024, all ports, or              your own list (for example 22, 80, 8000-8100), then press Scan.
+
+             To check a device the Network Scanner found, use the Scan Ports button              in its row or in its details. Only scan devices you own or are allowed              to test.")
         ));
 
         // Profiles section
         content_box.append(&self.create_section(
             &tr("Profiles"),
-            &tr("Profiles are the core feature of Network Manager. Each profile stores a complete \
+            &tr(
+                "Profiles are the core feature of Network Manager. Each profile stores a complete \
              set of network and system settings including:\n\n\
              • Network configuration (IP, DNS, gateway)\n\
              • Proxy settings\n\
@@ -124,26 +137,31 @@ impl HelpPage {
              • System services to enable/disable\n\
              • Custom scripts to run on activation\n\n\
              Create profiles for different locations or use cases, then switch between them \
-             with a single click. Profiles can be exported and imported for backup or sharing.")
+             with a single click. Profiles can be exported and imported for backup or sharing.",
+            ),
         ));
 
         // Logs section
         content_box.append(&self.create_section(
             &tr("Logs"),
-            &tr("The Logs page shows network-related system events and profile switch history. \
+            &tr(
+                "The Logs page shows network-related system events and profile switch history. \
              View connection changes, profile activations, and any errors that occurred. \
              Filter logs by type or search for specific events. Logs help you troubleshoot \
-             connectivity issues and track configuration changes over time.")
+             connectivity issues and track configuration changes over time.",
+            ),
         ));
 
         // Settings section
         content_box.append(&self.create_section(
             &tr("Settings"),
-            &tr("The Settings page allows you to configure application preferences. \
+            &tr(
+                "The Settings page allows you to configure application preferences. \
              Set the default profile to activate at startup, configure automatic \
              profile switching based on network detection, enable or disable \
              system tray integration, and customize notification preferences. \
-             Advanced options include daemon configuration and privilege settings.")
+             Advanced options include daemon configuration and privilege settings.",
+            ),
         ));
 
         // Profile Features section
@@ -157,18 +175,20 @@ impl HelpPage {
              • VPN connection settings\n\
              • System services to start/stop\n\
              • Pre/post activation scripts\n\
-             • Network interface selection")
+             • Network interface selection"),
         ));
 
         // Tips section
         content_box.append(&self.create_section(
             &tr("Tips"),
-            &tr("• Create a 'Default' profile as a baseline configuration.\n\
+            &tr(
+                "• Create a 'Default' profile as a baseline configuration.\n\
              • Use descriptive profile names like 'Home WiFi' or 'Office Wired'.\n\
              • Test profiles before relying on them in critical situations.\n\
              • Export important profiles for backup.\n\
              • Use the system tray for quick profile switching.\n\
-             • Check logs if a profile switch doesn't work as expected.")
+             • Check logs if a profile switch doesn't work as expected.",
+            ),
         ));
 
         scroll.set_child(Some(&content_box));
