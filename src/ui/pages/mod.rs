@@ -7,6 +7,7 @@
 mod dashboard_page;
 mod help_page;
 mod logs_page;
+mod port_scanner_page;
 mod profiles_page;
 mod scanner_page;
 mod settings_page;
@@ -14,6 +15,7 @@ mod settings_page;
 pub use dashboard_page::DashboardPage;
 pub use help_page::HelpPage;
 pub use logs_page::LogsPage;
+pub use port_scanner_page::PortScannerPage;
 pub use profiles_page::ProfilesPage;
 pub use scanner_page::ScannerPage;
 pub use settings_page::SettingsPage;

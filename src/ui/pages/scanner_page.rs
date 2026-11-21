@@ -23,6 +23,7 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::services::port_scanner;
 use crate::services::scanner::{self, HostResult, RangeError, ScanEvent, ScanMode};
 use crate::tr;
 use crate::ui::dialog_window;
@@ -139,7 +140,7 @@ fn cell_ip(cell: &gtk::ColumnViewCell) -> Option<Ipv4Addr> {
 }
 
 /// A button showing both an icon and a label.
-fn labelled_icon_button(icon_name: &str, label: &str) -> gtk::Button {
+pub(super) fn labelled_icon_button(icon_name: &str, label: &str) -> gtk::Button {
     let content = adw::ButtonContent::builder()
         .icon_name(icon_name)
         .label(label)
@@ -150,13 +151,13 @@ fn labelled_icon_button(icon_name: &str, label: &str) -> gtk::Button {
 }
 
 /// Status text shown next to the progress bar during a scan.
-fn progress_text(completed: usize, total: usize) -> String {
+pub(super) fn progress_text(completed: usize, total: usize) -> String {
     tr("Scanning… {completed} of {total}")
         .replace("{completed}", &completed.to_string())
         .replace("{total}", &total.to_string())
 }
 
-fn format_latency(latency: Option<f64>) -> String {
+pub(super) fn format_latency(latency: Option<f64>) -> String {
     match latency {
         Some(ms) if ms < 0.05 => "< 0.1 ms".to_string(),
         Some(ms) if ms < 10.0 => format!("{:.1} ms", ms),
@@ -205,22 +206,7 @@ fn device_summary(result: Option<&HostResult>, ip: Ipv4Addr, status: &str) -> St
 
 /// Human-readable protocol names for the service ports we probe.
 fn service_name(port: u16) -> &'static str {
-    match port {
-        22 => "SSH",
-        53 => "DNS",
-        80 => "HTTP",
-        443 => "HTTPS",
-        445 => "SMB",
-        631 => "IPP",
-        3306 => "MySQL",
-        3389 => "RDP",
-        5432 => "PostgreSQL",
-        8080 => "HTTP",
-        8123 => "Home Assistant",
-        9090 => "Cockpit",
-        32400 => "Plex",
-        _ => "",
-    }
+    port_scanner::known_service(port).unwrap_or_default()
 }
 
 fn services_text(ports: &[u16]) -> String {
@@ -248,7 +234,7 @@ fn services_tooltip(ports: &[u16]) -> Option<String> {
     )
 }
 
-fn csv_field(value: &str) -> String {
+pub(super) fn csv_field(value: &str) -> String {
     if value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
@@ -914,7 +900,8 @@ impl ScannerPage {
         view_column
     }
 
-    /// The trailing column: per-device copy and Wake-on-LAN buttons.
+    /// The trailing column: per-device copy, port scan, and Wake-on-LAN
+    /// buttons.
     fn actions_column(&self) -> gtk::ColumnViewColumn {
         let factory = gtk::SignalListItemFactory::new();
 
@@ -946,6 +933,21 @@ impl ScannerPage {
                 }
             });
             actions.append(&copy);
+
+            let ports = gtk::Button::from_icon_name("network-server-symbolic");
+            ports.add_css_class("flat");
+            ports.set_tooltip_text(Some(&tr("Scan ports")));
+            ports.connect_clicked({
+                let cell = cell.downgrade();
+                let page_weak = page_weak.clone();
+                move |_| {
+                    let ip = cell.upgrade().as_ref().and_then(cell_ip);
+                    if let (Some(ip), Some(page)) = (ip, page_weak.upgrade()) {
+                        page.scan_ports(ip);
+                    }
+                }
+            });
+            actions.append(&ports);
 
             let wake = gtk::Button::from_icon_name("system-reboot-symbolic");
             wake.add_css_class("flat");
@@ -1390,6 +1392,20 @@ impl ScannerPage {
             }
         }
 
+        // Hands the device to the port scanner page, then gets out of its way.
+        let ports_button = gtk::Button::with_label(&tr("Scan Ports"));
+        let page_weak = self.downgrade();
+        let dialog_weak = dialog.downgrade();
+        ports_button.connect_clicked(move |_| {
+            if let Some(page) = page_weak.upgrade() {
+                page.scan_ports(ip);
+            }
+            if let Some(dialog) = dialog_weak.upgrade() {
+                dialog.close();
+            }
+        });
+        buttons.append(&ports_button);
+
         let copy_button = gtk::Button::with_label(&tr("Copy Details"));
         let page_weak = self.downgrade();
         let summary_for_button = summary.clone();
@@ -1594,6 +1610,12 @@ impl ScannerPage {
                 entry.set_text(&range);
             }
         }
+    }
+
+    /// Open the port scanner page on a device and start scanning it.
+    fn scan_ports(&self, ip: Ipv4Addr) {
+        // The window owns the pages, so it does the handover.
+        let _ = self.activate_action("win.scan-ports", Some(&ip.to_string().to_variant()));
     }
 
     fn copy_to_clipboard(&self, text: &str, message: &str) {

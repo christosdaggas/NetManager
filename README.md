@@ -32,6 +32,7 @@ somewhere.
 - **Privacy**: your profiles are stored only on your computer, optionally encrypted with a passphrase
 - **Dashboard**: see your current connection at a glance
 - **Network scanner**: discover devices on your LAN with names, MAC vendors, open services, Wake-on-LAN, and CSV export
+- **Port scanner**: list the open TCP ports of a device, by address or name or straight from the network scanner
 - Follows your GNOME light or dark style
 
 ## Install on Fedora
@@ -70,7 +71,8 @@ The app checks GitHub once at startup to see if a newer version is available
 and shows a small notice if there is one. Connection checks ping 8.8.8.8 (the
 watchdog target can be changed in Settings), and the optional speed test
 downloads a file from Cloudflare. The network scanner sends pings and port
-probes only to the address range you choose. The app does not collect or send
+probes only to the address range you choose, and the port scanner connects
+only to the device and ports you choose. The app does not collect or send
 any personal data.
 
 ## Feedback and contributing
