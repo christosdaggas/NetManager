@@ -27,14 +27,7 @@ use crate::services::scanner::{self, HostResult, RangeError, ScanEvent, ScanMode
 use crate::tr;
 use crate::ui::dialog_window;
 
-const COL_STATUS: i32 = 12;
-const COL_ACTIONS: i32 = 58;
-const CELL_SPACING: i32 = 7;
-const DATA_COLUMN_COUNT: usize = 6;
-const MAX_COLUMN_WIDTH: i32 = 480;
-const RESIZE_HANDLE_WIDTH: i32 = 8;
-
-/// A data column whose width can be dragged by the user.
+/// A text column of the results table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DataColumn {
     Ip,
@@ -46,7 +39,7 @@ enum DataColumn {
 }
 
 impl DataColumn {
-    const ALL: [Self; DATA_COLUMN_COUNT] = [
+    const ALL: [Self; 6] = [
         Self::Ip,
         Self::Name,
         Self::Mac,
@@ -54,50 +47,6 @@ impl DataColumn {
         Self::Ping,
         Self::Services,
     ];
-
-    fn index(self) -> usize {
-        match self {
-            Self::Ip => 0,
-            Self::Name => 1,
-            Self::Mac => 2,
-            Self::Vendor => 3,
-            Self::Ping => 4,
-            Self::Services => 5,
-        }
-    }
-
-    fn default_width(self) -> i32 {
-        match self {
-            Self::Ip => 105,
-            Self::Name => 120,
-            Self::Mac => 110,
-            Self::Vendor => 120,
-            Self::Ping => 48,
-            Self::Services => 96,
-        }
-    }
-
-    fn min_width(self) -> i32 {
-        match self {
-            Self::Ip => 80,
-            Self::Name => 60,
-            Self::Mac => 90,
-            Self::Vendor => 60,
-            Self::Ping => 40,
-            Self::Services => 50,
-        }
-    }
-
-    fn next(self) -> Option<Self> {
-        match self {
-            Self::Ip => Some(Self::Name),
-            Self::Name => Some(Self::Mac),
-            Self::Mac => Some(Self::Vendor),
-            Self::Vendor => Some(Self::Ping),
-            Self::Ping => Some(Self::Services),
-            Self::Services => None,
-        }
-    }
 
     fn title(self) -> String {
         match self {
@@ -109,83 +58,102 @@ impl DataColumn {
             Self::Services => tr("Services"),
         }
     }
-}
 
-/// Widgets that make up one result row, kept for in-place updates.
-#[derive(Clone)]
-pub struct RowWidgets {
-    dot: gtk::Box,
-    ip: gtk::Label,
-    hostname: gtk::Label,
-    mac: gtk::Label,
-    vendor: gtk::Label,
-    latency: gtk::Label,
-    services: gtk::Label,
-    wake: gtk::Button,
-}
+    /// Width the column asks for, in characters of its own font.
+    ///
+    /// Sizing by characters instead of pixels keeps full addresses visible
+    /// at any font size. The value is constant per column so the table does
+    /// not shift as results arrive or the list scrolls.
+    fn width_chars(self) -> i32 {
+        match self {
+            Self::Ip => 15,
+            Self::Name => 12,
+            Self::Mac => 17,
+            Self::Vendor => 12,
+            Self::Ping => 8,
+            Self::Services => 10,
+        }
+    }
 
-impl RowWidgets {
-    fn label(&self, column: DataColumn) -> &gtk::Label {
-        match column {
-            DataColumn::Ip => &self.ip,
-            DataColumn::Name => &self.hostname,
-            DataColumn::Mac => &self.mac,
-            DataColumn::Vendor => &self.vendor,
-            DataColumn::Ping => &self.latency,
-            DataColumn::Services => &self.services,
+    /// Free-text columns share the width left over by the fixed ones.
+    fn expands(self) -> bool {
+        matches!(self, Self::Name | Self::Vendor | Self::Services)
+    }
+
+    fn css_class(self) -> Option<&'static str> {
+        match self {
+            Self::Ip => Some("scanner-ip"),
+            Self::Mac => Some("scanner-mac"),
+            Self::Ping => Some("scanner-numeric"),
+            Self::Services => Some("scanner-services"),
+            Self::Name | Self::Vendor => None,
+        }
+    }
+
+    /// Cell text and tooltip for a scanned address; `None` shows a dash.
+    fn value(self, ip: Ipv4Addr, result: Option<&HostResult>) -> Option<(String, Option<String>)> {
+        let own_tooltip = |text: &str| (text.to_string(), Some(text.to_string()));
+        match self {
+            // Never truncated, so the row's own tooltip can show through.
+            Self::Ip => Some((ip.to_string(), None)),
+            Self::Name => result?
+                .hostname
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .map(own_tooltip),
+            Self::Mac => result?
+                .mac
+                .as_deref()
+                .filter(|mac| !mac.is_empty())
+                .map(own_tooltip),
+            Self::Vendor => result?
+                .vendor
+                .as_deref()
+                .filter(|vendor| !vendor.is_empty())
+                .map(own_tooltip),
+            Self::Ping => result?
+                .latency_ms
+                .map(|latency| (format_latency(Some(latency)), None)),
+            Self::Services => {
+                let ports = &result?.open_ports;
+                let text = services_text(ports);
+                if ports.is_empty() || text.is_empty() {
+                    None
+                } else {
+                    Some((text, services_tooltip(ports)))
+                }
+            }
         }
     }
 }
 
-/// A label sized like its column header.
-fn column_label(text: &str, width: i32, expand: bool) -> gtk::Label {
-    let label = gtk::Label::new(Some(text));
-    label.set_xalign(0.0);
-    label.set_size_request(width, -1);
-    label.set_hexpand(expand);
-    // Keep long hostnames and vendors from widening the whole table; the
-    // label ellipsizes and the full value lives in its tooltip.
-    label.set_width_chars(1);
-    label.set_max_width_chars(1);
-    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    label.set_single_line_mode(true);
-    label
+/// The address a list item of the results table stands for.
+fn item_ip(item: &glib::Object) -> Option<Ipv4Addr> {
+    item.downcast_ref::<glib::BoxedAnyObject>()
+        .and_then(|boxed| boxed.try_borrow::<Ipv4Addr>().ok().map(|ip| *ip))
 }
 
-fn placeholder_label(width: i32, expand: bool, css: Option<&str>) -> gtk::Label {
-    let label = column_label("—", width, expand);
-    label.add_css_class("dim-label");
-    if let Some(css) = css {
-        label.add_css_class(css);
-    }
-    label
+/// The address shown by a table cell.
+fn cell_ip(cell: &gtk::ColumnViewCell) -> Option<Ipv4Addr> {
+    cell.item().as_ref().and_then(item_ip)
 }
 
-fn header_label(text: &str) -> gtk::Label {
-    let label = gtk::Label::new(Some(text));
-    label.set_xalign(0.0);
-    label.set_width_chars(1);
-    label.set_max_width_chars(1);
-    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    label.set_single_line_mode(true);
-    label.add_css_class("caption");
-    label.add_css_class("dim-label");
-    label
+/// A button showing both an icon and a label.
+fn labelled_icon_button(icon_name: &str, label: &str) -> gtk::Button {
+    let content = adw::ButtonContent::builder()
+        .icon_name(icon_name)
+        .label(label)
+        .build();
+    let button = gtk::Button::new();
+    button.set_child(Some(&content));
+    button
 }
 
-fn set_text_or_dash(label: &gtk::Label, value: Option<&str>) {
-    match value.filter(|value| !value.is_empty()) {
-        Some(value) => {
-            label.set_text(value);
-            label.remove_css_class("dim-label");
-            label.set_tooltip_text(Some(value));
-        }
-        None => {
-            label.set_text("—");
-            label.add_css_class("dim-label");
-            label.set_tooltip_text(None);
-        }
-    }
+/// Status text shown next to the progress bar during a scan.
+fn progress_text(completed: usize, total: usize) -> String {
+    tr("Scanning… {completed} of {total}")
+        .replace("{completed}", &completed.to_string())
+        .replace("{total}", &total.to_string())
 }
 
 fn format_latency(latency: Option<f64>) -> String {
@@ -303,18 +271,15 @@ mod imp {
         pub status_label: RefCell<Option<gtk::Label>>,
         pub error_label: RefCell<Option<gtk::Label>>,
         pub count_label: RefCell<Option<gtk::Label>>,
-        pub filter_dropdown: RefCell<Option<gtk::DropDown>>,
-        pub sort_dropdown: RefCell<Option<gtk::DropDown>>,
         pub stack: RefCell<Option<gtk::Stack>>,
-        pub list: RefCell<Option<gtk::ListBox>>,
-        pub column_widths: RefCell<[i32; DATA_COLUMN_COUNT]>,
-        pub header_cells: RefCell<Vec<gtk::Box>>,
+        /// One item per scanned address, in target order.
+        pub store: RefCell<Option<gio::ListStore>>,
 
         /// Results by address; `None` while the address is still being scanned.
         pub data: Rc<RefCell<HashMap<Ipv4Addr, Option<HostResult>>>>,
-        pub rows: RefCell<HashMap<Ipv4Addr, RowWidgets>>,
-        /// Target order, used for CSV export.
+        /// Target order, used for CSV export and to find an address in `store`.
         pub order: RefCell<Vec<Ipv4Addr>>,
+        pub positions: RefCell<HashMap<Ipv4Addr, u32>>,
 
         pub cancel_flag: RefCell<Option<Arc<AtomicBool>>>,
         pub generation: Cell<u64>,
@@ -360,20 +325,13 @@ impl ScannerPage {
     fn setup_ui(&self) {
         let imp = self.imp();
 
-        // Column widths are kept per page and can be changed from the header.
-        {
-            let mut widths = imp.column_widths.borrow_mut();
-            for (index, column) in DataColumn::ALL.iter().enumerate() {
-                widths[index] = column.default_width();
-            }
-        }
-
-        // Page header: title and a quiet export action.
+        // Page header: title and a quiet export action. Every block on the
+        // page shares the same 12px side margin so their edges line up.
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        header.set_margin_top(24);
+        header.set_margin_top(18);
         header.set_margin_bottom(12);
-        header.set_margin_start(24);
-        header.set_margin_end(24);
+        header.set_margin_start(12);
+        header.set_margin_end(12);
 
         let title_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
         title_box.set_hexpand(true);
@@ -444,14 +402,14 @@ impl ScannerPage {
         )));
         control_row.append(&mode_dropdown);
 
-        let scan_button = gtk::Button::with_label(&tr("Scan"));
+        // `Button::set_icon_name` replaces a button's label, so the icon and
+        // the text are set together as the button's content.
+        let scan_button = labelled_icon_button("system-search-symbolic", &tr("Scan"));
         scan_button.add_css_class("suggested-action");
-        scan_button.set_icon_name("system-search-symbolic");
         scan_button.set_valign(gtk::Align::Center);
         control_row.append(&scan_button);
 
-        let cancel_button = gtk::Button::with_label(&tr("Stop"));
-        cancel_button.set_icon_name("process-stop-symbolic");
+        let cancel_button = labelled_icon_button("process-stop-symbolic", &tr("Stop"));
         cancel_button.set_valign(gtk::Align::Center);
         cancel_button.set_visible(false);
         control_row.append(&cancel_button);
@@ -470,6 +428,9 @@ impl ScannerPage {
         let status_label = gtk::Label::new(Some(&tr("Ready to scan")));
         status_label.add_css_class("caption");
         status_label.add_css_class("dim-label");
+        // Tabular digits keep the progress bar from twitching as the count
+        // next to it changes.
+        status_label.add_css_class("numeric");
         status_label.set_xalign(0.0);
         status_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         status_label.set_tooltip_text(Some(&tr("Scan status")));
@@ -545,179 +506,236 @@ impl ScannerPage {
 
         results_box.append(&results_header);
 
-        let columns = gtk::Box::new(gtk::Orientation::Horizontal, CELL_SPACING);
-        columns.add_css_class("scanner-column-header");
-        columns.set_margin_start(12);
-        columns.set_margin_end(12);
-
-        let status_header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        status_header.set_size_request(COL_STATUS, -1);
-        columns.append(&status_header);
-
-        let mut header_cells = Vec::with_capacity(DATA_COLUMN_COUNT);
-        for column in DataColumn::ALL {
-            let cell = self.create_column_header(column);
-            if column == DataColumn::Services {
-                cell.set_tooltip_text(Some(&tr(
-                    "Services are detected by ports during a thorough scan",
-                )));
-            }
-            header_cells.push(cell.clone());
-            columns.append(&cell);
-        }
-
-        let actions_spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        actions_spacer.set_size_request(COL_ACTIONS, -1);
-        columns.append(&actions_spacer);
-
-        // Everything stays left-aligned; leftover width is empty space.
-        let trailing = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        trailing.set_hexpand(true);
-        columns.append(&trailing);
-
-        results_box.append(&columns);
-
-        let scroller = gtk::ScrolledWindow::new();
-        scroller.set_vexpand(true);
-        // Never scroll sideways: the columns must stay aligned with the
-        // header above the list, so long values ellipsize instead.
-        scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        scroller.set_margin_start(12);
-        scroller.set_margin_end(12);
-        scroller.set_margin_bottom(12);
-
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
-        list.set_activate_on_single_click(true);
-        list.add_css_class("scanner-list");
-
-        let page_weak = self.downgrade();
-        list.connect_row_activated(move |_, row| {
-            if let Ok(ip) = row.widget_name().parse::<Ipv4Addr>() {
-                if let Some(page) = page_weak.upgrade() {
-                    page.show_device_details(ip);
-                }
-            }
-        });
+        // The results table. A column view gives the header and every cell
+        // of a column the same width by construction, lets the user resize
+        // columns from the header, and only builds the rows on screen.
+        let store = gio::ListStore::new::<glib::BoxedAnyObject>();
 
         // Filter by the live search text and the status selector.
-        let filter_data = imp.data.clone();
-        let filter_weak = filter_dropdown.downgrade();
-        let search_weak = search_entry.downgrade();
-        list.set_filter_func(move |row| {
-            let Ok(ip) = row.widget_name().parse::<Ipv4Addr>() else {
-                return true;
-            };
-            let data = filter_data.borrow();
-            let Some(slot) = data.get(&ip) else {
-                return true;
-            };
+        let filter = gtk::CustomFilter::new({
+            let data = imp.data.clone();
+            let filter_weak = filter_dropdown.downgrade();
+            let search_weak = search_entry.downgrade();
+            move |item| {
+                let Some(ip) = item_ip(item) else {
+                    return true;
+                };
+                let data = data.borrow();
+                let Some(slot) = data.get(&ip) else {
+                    return true;
+                };
 
-            let filter = filter_weak
-                .upgrade()
-                .map(|dropdown| dropdown.selected())
-                .unwrap_or(0);
-            let status_matches = match filter {
-                1 => slot.as_ref().is_some_and(|result| result.online),
-                2 => slot.as_ref().is_some_and(|result| !result.online),
-                _ => true,
-            };
-            if !status_matches {
-                return false;
-            }
+                let status = filter_weak
+                    .upgrade()
+                    .map(|dropdown| dropdown.selected())
+                    .unwrap_or(0);
+                let status_matches = match status {
+                    1 => slot.as_ref().is_some_and(|result| result.online),
+                    2 => slot.as_ref().is_some_and(|result| !result.online),
+                    _ => true,
+                };
+                if !status_matches {
+                    return false;
+                }
 
-            let query = search_weak
-                .upgrade()
-                .map(|entry| entry.text().to_lowercase())
-                .unwrap_or_default();
-            if query.is_empty() {
-                return true;
-            }
-            if ip.to_string().contains(&query) {
-                return true;
-            }
-            slot.as_ref().is_some_and(|result| {
-                result
-                    .hostname
-                    .as_deref()
-                    .is_some_and(|name| name.to_lowercase().contains(&query))
-                    || result
-                        .mac
+                let query = search_weak
+                    .upgrade()
+                    .map(|entry| entry.text().to_lowercase())
+                    .unwrap_or_default();
+                if query.is_empty() {
+                    return true;
+                }
+                if ip.to_string().contains(&query) {
+                    return true;
+                }
+                slot.as_ref().is_some_and(|result| {
+                    result
+                        .hostname
                         .as_deref()
-                        .is_some_and(|mac| mac.to_lowercase().contains(&query))
-                    || result
-                        .vendor
-                        .as_deref()
-                        .is_some_and(|vendor| vendor.to_lowercase().contains(&query))
-            })
+                        .is_some_and(|name| name.to_lowercase().contains(&query))
+                        || result
+                            .mac
+                            .as_deref()
+                            .is_some_and(|mac| mac.to_lowercase().contains(&query))
+                        || result
+                            .vendor
+                            .as_deref()
+                            .is_some_and(|vendor| vendor.to_lowercase().contains(&query))
+                })
+            }
         });
 
         // IP is the natural order; name and status are handy on busy networks.
-        let sort_data = imp.data.clone();
-        let sort_weak = sort_dropdown.downgrade();
-        list.set_sort_func(move |a, b| {
-            let Ok(ip_a) = a.widget_name().parse::<Ipv4Addr>() else {
-                return gtk::Ordering::Equal;
-            };
-            let Ok(ip_b) = b.widget_name().parse::<Ipv4Addr>() else {
-                return gtk::Ordering::Equal;
-            };
-            let mode = sort_weak
-                .upgrade()
-                .map(|dropdown| dropdown.selected())
-                .unwrap_or(0);
+        let sorter = gtk::CustomSorter::new({
+            let data = imp.data.clone();
+            let sort_weak = sort_dropdown.downgrade();
+            move |a, b| {
+                let (Some(ip_a), Some(ip_b)) = (item_ip(a), item_ip(b)) else {
+                    return gtk::Ordering::Equal;
+                };
+                let mode = sort_weak
+                    .upgrade()
+                    .map(|dropdown| dropdown.selected())
+                    .unwrap_or(0);
 
-            if mode == 1 || mode == 2 {
-                let data = sort_data.borrow();
-                let result_a = data.get(&ip_a).and_then(Option::as_ref);
-                let result_b = data.get(&ip_b).and_then(Option::as_ref);
-                if mode == 1 {
-                    let name_a = result_a
-                        .and_then(|result| result.hostname.as_deref())
-                        .unwrap_or_default()
-                        .to_lowercase();
-                    let name_b = result_b
-                        .and_then(|result| result.hostname.as_deref())
-                        .unwrap_or_default()
-                        .to_lowercase();
-                    match name_a.cmp(&name_b) {
-                        std::cmp::Ordering::Equal => {}
-                        ordering => return ordering.into(),
-                    }
-                } else {
-                    let online_a = result_a.is_some_and(|result| result.online);
-                    let online_b = result_b.is_some_and(|result| result.online);
-                    match online_b.cmp(&online_a) {
-                        std::cmp::Ordering::Equal => {}
-                        ordering => return ordering.into(),
+                if mode == 1 || mode == 2 {
+                    let data = data.borrow();
+                    let result_a = data.get(&ip_a).and_then(Option::as_ref);
+                    let result_b = data.get(&ip_b).and_then(Option::as_ref);
+                    if mode == 1 {
+                        // Named devices first; the unnamed ones keep IP order.
+                        let name = |result: Option<&HostResult>| {
+                            result
+                                .and_then(|result| result.hostname.as_deref())
+                                .filter(|name| !name.is_empty())
+                                .map(str::to_lowercase)
+                        };
+                        let ordering = match (name(result_a), name(result_b)) {
+                            (Some(name_a), Some(name_b)) => name_a.cmp(&name_b),
+                            (Some(_), None) => std::cmp::Ordering::Less,
+                            (None, Some(_)) => std::cmp::Ordering::Greater,
+                            (None, None) => std::cmp::Ordering::Equal,
+                        };
+                        if ordering != std::cmp::Ordering::Equal {
+                            return ordering.into();
+                        }
+                    } else {
+                        let online_a = result_a.is_some_and(|result| result.online);
+                        let online_b = result_b.is_some_and(|result| result.online);
+                        match online_b.cmp(&online_a) {
+                            std::cmp::Ordering::Equal => {}
+                            ordering => return ordering.into(),
+                        }
                     }
                 }
-            }
 
-            u32::from(ip_a).cmp(&u32::from(ip_b)).into()
-        });
-
-        let list_weak = list.downgrade();
-        search_entry.connect_search_changed(move |_| {
-            if let Some(list) = list_weak.upgrade() {
-                list.invalidate_filter();
-            }
-        });
-        let list_weak = list.downgrade();
-        filter_dropdown.connect_selected_notify(move |_| {
-            if let Some(list) = list_weak.upgrade() {
-                list.invalidate_filter();
-            }
-        });
-        let list_weak = list.downgrade();
-        sort_dropdown.connect_selected_notify(move |_| {
-            if let Some(list) = list_weak.upgrade() {
-                list.invalidate_sort();
+                u32::from(ip_a).cmp(&u32::from(ip_b)).into()
             }
         });
 
-        scroller.set_child(Some(&list));
-        results_box.append(&scroller);
+        let filter_model = gtk::FilterListModel::new(Some(store.clone()), Some(filter.clone()));
+        let sort_model = gtk::SortListModel::new(Some(filter_model), Some(sorter.clone()));
+        let selection = gtk::NoSelection::new(Some(sort_model));
+
+        let table = gtk::ColumnView::new(Some(selection.clone()));
+        table.add_css_class("scanner-table");
+        table.add_css_class("data-table");
+        table.set_single_click_activate(true);
+        table.set_reorderable(false);
+
+        table.append_column(&self.status_column());
+        let mut stretchy = Vec::new();
+        for column in DataColumn::ALL {
+            let view_column = self.text_column(column);
+            table.append_column(&view_column);
+            if column.expands() {
+                stretchy.push(view_column);
+            }
+        }
+        let actions_column = self.actions_column();
+        table.append_column(&actions_column);
+
+        // Dragging a column's edge gives it a fixed width. A column that
+        // also stretches keeps taking a share of the leftover space on top
+        // of that width, so its edge would not follow the pointer: once the
+        // user sizes a column, it stops stretching. If none is left to
+        // stretch, the trailing column takes the slack so the row buttons
+        // stay at the right edge.
+        let stretchy_weak: Vec<_> = stretchy.iter().map(|column| column.downgrade()).collect();
+        for view_column in &stretchy {
+            let stretchy_weak = stretchy_weak.clone();
+            let actions_weak = actions_column.downgrade();
+            view_column.connect_fixed_width_notify(move |resized| {
+                if resized.fixed_width() < 0 {
+                    return;
+                }
+                resized.set_expand(false);
+                let any_stretchy = stretchy_weak
+                    .iter()
+                    .filter_map(|column| column.upgrade())
+                    .any(|column| column.expands());
+                if !any_stretchy {
+                    if let Some(actions) = actions_weak.upgrade() {
+                        actions.set_expand(true);
+                    }
+                }
+            });
+        }
+
+        let page_weak = self.downgrade();
+        table.connect_activate(move |table, position| {
+            let ip = table
+                .model()
+                .and_then(|model| model.item(position))
+                .as_ref()
+                .and_then(item_ip);
+            if let (Some(ip), Some(page)) = (ip, page_weak.upgrade()) {
+                page.show_device_details(ip);
+            }
+        });
+
+        // The rows live in the view's inner list. Marking that list, and not
+        // the whole view, as clickable leaves the header with its own cursor.
+        if let Some(rows) = table.last_child() {
+            rows.set_cursor_from_name(Some("pointer"));
+            rows.set_tooltip_text(Some(&tr("Click for device details")));
+        }
+
+        search_entry.connect_search_changed({
+            let filter = filter.clone();
+            move |_| filter.changed(gtk::FilterChange::Different)
+        });
+        filter_dropdown.connect_selected_notify({
+            let filter = filter.clone();
+            move |_| filter.changed(gtk::FilterChange::Different)
+        });
+        sort_dropdown.connect_selected_notify({
+            let sorter = sorter.clone();
+            move |_| sorter.changed(gtk::SorterChange::Different)
+        });
+
+        let scroller = gtk::ScrolledWindow::new();
+        // The view scrolls its header together with its rows, so a narrow
+        // window can scroll sideways without the columns drifting apart.
+        scroller.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        scroller.set_child(Some(&table));
+
+        // Shown in place of the table when the search or the status filter
+        // hides every device. A table without rows has nothing to size its
+        // columns by, so it steps aside instead of collapsing.
+        let no_match = adw::StatusPage::new();
+        no_match.add_css_class("compact");
+        no_match.set_icon_name(Some("edit-find-symbolic"));
+        no_match.set_title(&tr("No Matching Devices"));
+        no_match.set_description(Some(&tr("No device matches the current search or filter.")));
+
+        let table_frame = gtk::Stack::new();
+        table_frame.add_css_class("scanner-table-frame");
+        table_frame.set_overflow(gtk::Overflow::Hidden);
+        table_frame.set_vexpand(true);
+        table_frame.set_margin_start(12);
+        table_frame.set_margin_end(12);
+        table_frame.set_margin_bottom(12);
+        table_frame.add_named(&scroller, Some("table"));
+        table_frame.add_named(&no_match, Some("no-match"));
+
+        selection.connect_items_changed({
+            let table_frame = table_frame.downgrade();
+            let store = store.downgrade();
+            move |visible, _, _, _| {
+                if let Some(table_frame) = table_frame.upgrade() {
+                    let has_targets = store.upgrade().is_some_and(|store| store.n_items() > 0);
+                    let page = if has_targets && visible.n_items() == 0 {
+                        "no-match"
+                    } else {
+                        "table"
+                    };
+                    table_frame.set_visible_child_name(page);
+                }
+            }
+        });
+
+        results_box.append(&table_frame);
         stack.add_named(&results_box, Some("results"));
         stack.set_visible_child_name("empty");
 
@@ -734,11 +752,8 @@ impl ScannerPage {
         *imp.status_label.borrow_mut() = Some(status_label);
         *imp.error_label.borrow_mut() = Some(error_label);
         *imp.count_label.borrow_mut() = Some(count_label);
-        *imp.filter_dropdown.borrow_mut() = Some(filter_dropdown);
-        *imp.sort_dropdown.borrow_mut() = Some(sort_dropdown);
         *imp.stack.borrow_mut() = Some(stack);
-        *imp.list.borrow_mut() = Some(list);
-        *imp.header_cells.borrow_mut() = header_cells;
+        *imp.store.borrow_mut() = Some(store);
 
         // Actions.
         let page_weak = self.downgrade();
@@ -800,142 +815,195 @@ impl ScannerPage {
         });
     }
 
-    /// Build a header cell with a drag handle at its trailing edge.
-    fn create_column_header(&self, column: DataColumn) -> gtk::Box {
-        let width = self.imp().column_widths.borrow()[column.index()];
-        let cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        cell.set_size_request(width, -1);
-        cell.set_valign(gtk::Align::Center);
+    /// The leading column: a dot coloured by the address's scan state.
+    fn status_column(&self) -> gtk::ColumnViewColumn {
+        let factory = gtk::SignalListItemFactory::new();
+        factory.connect_setup(|_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            dot.set_halign(gtk::Align::Center);
+            dot.set_valign(gtk::Align::Center);
+            dot.add_css_class("scanner-dot");
+            cell.set_child(Some(&dot));
+        });
 
-        let label = header_label(&column.title());
-        label.set_hexpand(true);
-        cell.append(&label);
+        let data = self.imp().data.clone();
+        factory.connect_bind(move |_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let (Some(dot), Some(ip)) = (cell.child(), cell_ip(cell)) else {
+                return;
+            };
+            let online = data
+                .borrow()
+                .get(&ip)
+                .and_then(Option::as_ref)
+                .map(|result| result.online);
+            let (class, tooltip) = match online {
+                None => ("waiting", tr("Waiting")),
+                Some(true) => ("online", tr("Online")),
+                Some(false) => ("offline", tr("Offline")),
+            };
+            for stale in ["waiting", "online", "offline"] {
+                dot.remove_css_class(stale);
+            }
+            dot.add_css_class(class);
+            dot.set_tooltip_text(Some(&tooltip));
+        });
 
-        let handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        handle.set_size_request(RESIZE_HANDLE_WIDTH, -1);
-        handle.set_valign(gtk::Align::Fill);
-        handle.set_cursor_from_name(Some("ew-resize"));
-        handle.add_css_class("scanner-resize-handle");
-        handle.set_tooltip_text(Some(&tr("Drag to resize column")));
-        self.install_column_resize(&handle, column);
-        cell.append(&handle);
-
-        cell
+        let column = gtk::ColumnViewColumn::new(None, Some(factory));
+        column.set_resizable(false);
+        column
     }
 
-    fn install_column_resize(&self, handle: &gtk::Box, column: DataColumn) {
-        let gesture = gtk::GestureDrag::new();
-        gesture.set_button(1);
+    /// A resizable text column showing one field of each result.
+    fn text_column(&self, column: DataColumn) -> gtk::ColumnViewColumn {
+        let factory = gtk::SignalListItemFactory::new();
+        factory.connect_setup(move |_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let label = gtk::Label::new(None);
+            label.set_xalign(0.0);
+            // A fixed request keeps long hostnames and vendors from widening
+            // the column; the label ellipsizes and its tooltip has the rest.
+            label.set_width_chars(column.width_chars());
+            label.set_max_width_chars(column.width_chars());
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_single_line_mode(true);
+            // The column's font is set once, here: the request above is in
+            // characters, so every cell of a column must share one font to
+            // ask for the same width.
+            if let Some(class) = column.css_class() {
+                label.add_css_class(class);
+            }
+            cell.set_child(Some(&label));
+        });
 
-        let start_width = Rc::new(Cell::new(0));
-        let begin_width = start_width.clone();
-        let page_weak = self.downgrade();
-        gesture.connect_drag_begin(move |_, _, _| {
-            if let Some(page) = page_weak.upgrade() {
-                begin_width.set(page.imp().column_widths.borrow()[column.index()]);
+        let data = self.imp().data.clone();
+        factory.connect_bind(move |_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let (Some(label), Some(ip)) =
+                (cell.child().and_downcast::<gtk::Label>(), cell_ip(cell))
+            else {
+                return;
+            };
+            let value = column.value(ip, data.borrow().get(&ip).and_then(Option::as_ref));
+            match value {
+                Some((text, tooltip)) => {
+                    label.set_text(&text);
+                    label.set_tooltip_text(tooltip.as_deref());
+                    label.remove_css_class("dim-label");
+                }
+                None => {
+                    label.set_text("—");
+                    label.set_tooltip_text(None);
+                    label.add_css_class("dim-label");
+                }
             }
         });
 
+        let view_column = gtk::ColumnViewColumn::new(Some(&column.title()), Some(factory));
+        view_column.set_resizable(true);
+        view_column.set_expand(column.expands());
+        view_column
+    }
+
+    /// The trailing column: per-device copy and Wake-on-LAN buttons.
+    fn actions_column(&self) -> gtk::ColumnViewColumn {
+        let factory = gtk::SignalListItemFactory::new();
+
         let page_weak = self.downgrade();
-        let update_width = start_width;
-        gesture.connect_drag_update(move |_, offset_x, _| {
-            if let Some(page) = page_weak.upgrade() {
-                let target = update_width.get() + offset_x.round() as i32;
-                page.resize_column(column, target);
-            }
+        factory.connect_setup(move |_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let actions = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+            actions.set_halign(gtk::Align::End);
+            actions.set_valign(gtk::Align::Center);
+
+            // Cells are reused as the list scrolls, so each handler reads
+            // the address its cell shows at the time of the click.
+            let copy = gtk::Button::from_icon_name("edit-copy-symbolic");
+            copy.add_css_class("flat");
+            copy.set_tooltip_text(Some(&tr("Copy IP address")));
+            copy.connect_clicked({
+                let cell = cell.downgrade();
+                let page_weak = page_weak.clone();
+                move |_| {
+                    let ip = cell.upgrade().as_ref().and_then(cell_ip);
+                    if let (Some(ip), Some(page)) = (ip, page_weak.upgrade()) {
+                        page.copy_to_clipboard(
+                            &ip.to_string(),
+                            &tr("IP address {ip} copied").replace("{ip}", &ip.to_string()),
+                        );
+                    }
+                }
+            });
+            actions.append(&copy);
+
+            let wake = gtk::Button::from_icon_name("system-reboot-symbolic");
+            wake.add_css_class("flat");
+            wake.connect_clicked({
+                let cell = cell.downgrade();
+                let page_weak = page_weak.clone();
+                move |_| {
+                    let ip = cell.upgrade().as_ref().and_then(cell_ip);
+                    let (Some(ip), Some(page)) = (ip, page_weak.upgrade()) else {
+                        return;
+                    };
+                    let mac = page
+                        .imp()
+                        .data
+                        .borrow()
+                        .get(&ip)
+                        .and_then(Option::as_ref)
+                        .and_then(|result| result.mac.clone());
+                    if let Some(mac) = mac {
+                        page.wake_host(&mac);
+                    }
+                }
+            });
+            actions.append(&wake);
+
+            cell.set_child(Some(&actions));
         });
 
-        handle.add_controller(gesture);
-    }
+        let data = self.imp().data.clone();
+        factory.connect_bind(move |_, object| {
+            let Some(cell) = object.downcast_ref::<gtk::ColumnViewCell>() else {
+                return;
+            };
+            let (Some(wake), Some(ip)) = (
+                cell.child().and_then(|actions| actions.last_child()),
+                cell_ip(cell),
+            ) else {
+                return;
+            };
+            let data = data.borrow();
+            let result = data.get(&ip).and_then(Option::as_ref);
+            let online = result.is_some_and(|result| result.online);
+            let has_mac = result.is_some_and(|result| result.mac.is_some());
 
-    /// Resize a column from a header drag.
-    ///
-    /// Growth uses empty space first and then borrows width from the next
-    /// column; shrinking hands the width to the next column. This keeps the
-    /// table inside the page instead of forcing a horizontal scrollbar.
-    fn resize_column(&self, column: DataColumn, target: i32) {
-        let imp = self.imp();
-        let mut widths = imp.column_widths.borrow_mut();
-        let index = column.index();
-        let current = widths[index];
-        let target = target.clamp(column.min_width(), MAX_COLUMN_WIDTH);
-        let mut delta = target - current;
-        if delta == 0 {
-            return;
-        }
+            wake.set_sensitive(result.is_some() && !online && has_mac);
+            let tooltip = if online {
+                tr("Device is online")
+            } else if has_mac || result.is_none() {
+                tr("Wake on LAN")
+            } else {
+                tr("Wake on LAN needs a MAC address")
+            };
+            wake.set_tooltip_text(Some(&tooltip));
+        });
 
-        let snapshot = *widths;
-
-        if delta > 0 {
-            let spare = self.column_spare(&widths[..]);
-            let from_spare = delta.min(spare).min(MAX_COLUMN_WIDTH - current);
-            if from_spare > 0 {
-                widths[index] += from_spare;
-                delta -= from_spare;
-            }
-
-            if delta > 0 {
-                if let Some(next) = column.next() {
-                    let next_index = next.index();
-                    let take = delta
-                        .min(widths[next_index] - next.min_width())
-                        .min(MAX_COLUMN_WIDTH - widths[index]);
-                    if take > 0 {
-                        widths[index] += take;
-                        widths[next_index] -= take;
-                    }
-                }
-            }
-        } else {
-            let shrink = (-delta).min(current - column.min_width());
-            if shrink > 0 {
-                if let Some(next) = column.next() {
-                    let next_index = next.index();
-                    let give = shrink.min(MAX_COLUMN_WIDTH - widths[next_index]);
-                    if give > 0 {
-                        widths[index] -= give;
-                        widths[next_index] += give;
-                    }
-                } else {
-                    widths[index] -= shrink;
-                }
-            }
-        }
-
-        let new_widths = *widths;
-        drop(widths);
-
-        for column in DataColumn::ALL {
-            let index = column.index();
-            if new_widths[index] != snapshot[index] {
-                self.apply_column_width(column, new_widths[index]);
-            }
-        }
-    }
-
-    /// Free horizontal space left in the table, in pixels.
-    fn column_spare(&self, widths: &[i32]) -> i32 {
-        let page_width = self.width();
-        if page_width <= 0 {
-            return 0;
-        }
-        // Page margins (12px each) plus the column row's inner padding.
-        let available = page_width - 40;
-        let used = widths.iter().sum::<i32>()
-            + COL_STATUS
-            + COL_ACTIONS
-            + CELL_SPACING * (DATA_COLUMN_COUNT as i32 + 2);
-        (available - used).max(0)
-    }
-
-    fn apply_column_width(&self, column: DataColumn, width: i32) {
-        let imp = self.imp();
-        if let Some(cell) = imp.header_cells.borrow().get(column.index()) {
-            cell.set_size_request(width, -1);
-        }
-        for row in imp.rows.borrow().values() {
-            row.label(column).set_size_request(width, -1);
-        }
+        let column = gtk::ColumnViewColumn::new(None, Some(factory));
+        column.set_resizable(false);
+        column
     }
 
     /// Start a scan using the range and mode currently in the controls.
@@ -1062,8 +1130,9 @@ impl ScannerPage {
         if let Some(dropdown) = imp.mode_dropdown.borrow().as_ref() {
             dropdown.set_sensitive(!scanning);
         }
+        // Stop takes the place of Scan, so the row keeps its layout.
         if let Some(button) = imp.scan_button.borrow().as_ref() {
-            button.set_sensitive(!scanning);
+            button.set_visible(!scanning);
         }
         if let Some(button) = imp.cancel_button.borrow().as_ref() {
             button.set_visible(scanning);
@@ -1072,165 +1141,50 @@ impl ScannerPage {
         if let Some(bar) = imp.progress_bar.borrow().as_ref() {
             bar.set_visible(scanning);
         }
-        if scanning {
-            if let Some(status) = imp.status_label.borrow().as_ref() {
-                let range = imp
-                    .range_entry
-                    .borrow()
-                    .as_ref()
-                    .map(|entry| entry.text())
-                    .unwrap_or_default();
-                status.set_text(&tr("Scanning {range}…").replace("{range}", &range));
+        if let Some(status) = imp.status_label.borrow().as_ref() {
+            // While scanning, the label keeps the width of its longest
+            // text so the progress bar beside it does not change size.
+            let total = imp.total.get();
+            if scanning {
+                status.set_width_chars(progress_text(total, total).chars().count() as i32);
+                status.set_text(&progress_text(0, total));
+            } else {
+                status.set_width_chars(-1);
             }
+        }
+        if scanning {
             if let Some(label) = imp.error_label.borrow().as_ref() {
                 label.set_visible(false);
             }
         }
     }
 
-    /// Replace the result list with fresh waiting rows for `targets`.
+    /// Replace the results with fresh waiting rows for `targets`.
     fn reset_results(&self, targets: &[Ipv4Addr]) {
         let imp = self.imp();
-        let Some(list) = imp.list.borrow().clone() else {
-            return;
-        };
-        while let Some(child) = list.first_child() {
-            list.remove(&child);
+
+        {
+            let mut data = imp.data.borrow_mut();
+            data.clear();
+            data.extend(targets.iter().map(|&ip| (ip, None)));
         }
+        *imp.order.borrow_mut() = targets.to_vec();
+        *imp.positions.borrow_mut() = targets
+            .iter()
+            .enumerate()
+            .map(|(position, &ip)| (ip, position as u32))
+            .collect();
 
-        imp.data.borrow_mut().clear();
-        imp.rows.borrow_mut().clear();
-        imp.order.borrow_mut().clear();
-
-        for &ip in targets {
-            let (row, widgets) = self.create_result_row(ip);
-            imp.data.borrow_mut().insert(ip, None);
-            imp.rows.borrow_mut().insert(ip, widgets);
-            imp.order.borrow_mut().push(ip);
-            // Appending may run the sort/filter functions; do it after the
-            // maps are complete so those callbacks never re-enter a borrow.
-            list.append(&row);
+        // The filter and the sorter read `data` while the store changes, so
+        // it is complete, and no longer borrowed, before the rows go in.
+        let store = imp.store.borrow().clone();
+        if let Some(store) = store {
+            let items: Vec<glib::BoxedAnyObject> = targets
+                .iter()
+                .map(|&ip| glib::BoxedAnyObject::new(ip))
+                .collect();
+            store.splice(0, store.n_items(), &items);
         }
-    }
-
-    fn create_result_row(&self, ip: Ipv4Addr) -> (gtk::ListBoxRow, RowWidgets) {
-        let widths = *self.imp().column_widths.borrow();
-
-        let row = gtk::ListBoxRow::new();
-        row.set_widget_name(&ip.to_string());
-        row.set_activatable(true);
-        row.set_selectable(false);
-        row.add_css_class("scanner-row");
-        row.set_cursor_from_name(Some("pointer"));
-        row.set_tooltip_text(Some(&tr("Click for device details")));
-
-        let line = gtk::Box::new(gtk::Orientation::Horizontal, CELL_SPACING);
-        line.set_valign(gtk::Align::Center);
-
-        let status_wrap = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        status_wrap.set_size_request(COL_STATUS, -1);
-        status_wrap.set_halign(gtk::Align::Start);
-        status_wrap.set_valign(gtk::Align::Center);
-
-        let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        dot.set_size_request(9, 9);
-        dot.set_valign(gtk::Align::Center);
-        dot.add_css_class("scanner-dot");
-        dot.add_css_class("waiting");
-        dot.set_tooltip_text(Some(&tr("Waiting")));
-        status_wrap.append(&dot);
-        line.append(&status_wrap);
-
-        let ip_label = column_label(&ip.to_string(), widths[DataColumn::Ip.index()], false);
-        ip_label.add_css_class("scanner-ip");
-        line.append(&ip_label);
-
-        let hostname = placeholder_label(widths[DataColumn::Name.index()], false, None);
-        line.append(&hostname);
-
-        let mac = placeholder_label(widths[DataColumn::Mac.index()], false, Some("scanner-mac"));
-        line.append(&mac);
-
-        let vendor = placeholder_label(widths[DataColumn::Vendor.index()], false, None);
-        line.append(&vendor);
-
-        let latency = placeholder_label(
-            widths[DataColumn::Ping.index()],
-            false,
-            Some("scanner-numeric"),
-        );
-        line.append(&latency);
-
-        let services = placeholder_label(
-            widths[DataColumn::Services.index()],
-            false,
-            Some("scanner-services"),
-        );
-        line.append(&services);
-
-        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        actions.set_size_request(COL_ACTIONS, -1);
-        actions.set_halign(gtk::Align::End);
-        actions.set_valign(gtk::Align::Center);
-
-        let copy = gtk::Button::from_icon_name("edit-copy-symbolic");
-        copy.add_css_class("flat");
-        copy.set_tooltip_text(Some(&tr("Copy IP address")));
-        copy.set_valign(gtk::Align::Center);
-        let page_weak = self.downgrade();
-        copy.connect_clicked(move |_| {
-            if let Some(page) = page_weak.upgrade() {
-                page.copy_to_clipboard(
-                    &ip.to_string(),
-                    &tr("IP address {ip} copied").replace("{ip}", &ip.to_string()),
-                );
-            }
-        });
-        actions.append(&copy);
-
-        let wake = gtk::Button::from_icon_name("system-reboot-symbolic");
-        wake.add_css_class("flat");
-        wake.set_tooltip_text(Some(&tr("Wake on LAN")));
-        wake.set_valign(gtk::Align::Center);
-        wake.set_sensitive(false);
-        let page_weak = self.downgrade();
-        wake.connect_clicked(move |_| {
-            if let Some(page) = page_weak.upgrade() {
-                let mac = page
-                    .imp()
-                    .data
-                    .borrow()
-                    .get(&ip)
-                    .and_then(|result| result.as_ref())
-                    .and_then(|result| result.mac.clone());
-                if let Some(mac) = mac {
-                    page.wake_host(&mac);
-                }
-            }
-        });
-        actions.append(&wake);
-
-        line.append(&actions);
-
-        let trailing = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        trailing.set_hexpand(true);
-        line.append(&trailing);
-
-        row.set_child(Some(&line));
-
-        (
-            row,
-            RowWidgets {
-                dot,
-                ip: ip_label,
-                hostname,
-                mac,
-                vendor,
-                latency,
-                services,
-                wake,
-            },
-        )
     }
 
     fn show_device_details(&self, ip: Ipv4Addr) {
@@ -1311,16 +1265,22 @@ impl ScannerPage {
         name.set_tooltip_text(Some(&display_name));
         hero_text.append(&name);
 
-        let subtitle = result
-            .as_ref()
-            .and_then(|result| result.vendor.as_deref())
-            .map(|vendor| format!("{} • {}", ip, vendor))
-            .unwrap_or_else(|| ip.to_string());
+        // A device without a name already shows its IP as the title, so the
+        // line below does not repeat it.
+        let vendor = result.as_ref().and_then(|result| result.vendor.clone());
+        let subtitle = match (hostname.is_some(), vendor) {
+            (true, Some(vendor)) => format!("{} • {}", ip, vendor),
+            (true, None) => ip.to_string(),
+            (false, Some(vendor)) => vendor,
+            (false, None) => String::new(),
+        };
         let subtitle_label = gtk::Label::new(Some(&subtitle));
         subtitle_label.add_css_class("dim-label");
         subtitle_label.set_halign(gtk::Align::Start);
         subtitle_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         subtitle_label.set_tooltip_text(Some(&subtitle));
+        subtitle_label.set_visible(!subtitle.is_empty());
+        hero_text.set_valign(gtk::Align::Center);
         hero_text.append(&subtitle_label);
         hero.append(&hero_text);
 
@@ -1397,7 +1357,8 @@ impl ScannerPage {
             services_group.set_description(Some(&tr(
                 "Run a thorough scan to detect services on this device",
             )));
-            let row = self.detail_row(&tr("No open services detected"), None, false);
+            let row = adw::ActionRow::new();
+            row.set_title(&tr("No open services detected"));
             row.add_css_class("dim-label");
             services_group.add(&row);
         } else {
@@ -1419,7 +1380,6 @@ impl ScannerPage {
         if !online {
             if let Some(mac) = result.as_ref().and_then(|result| result.mac.clone()) {
                 let wake_button = gtk::Button::with_label(&tr("Wake on LAN"));
-                wake_button.set_icon_name("system-reboot-symbolic");
                 let page_weak = self.downgrade();
                 wake_button.connect_clicked(move |_| {
                     if let Some(page) = page_weak.upgrade() {
@@ -1431,7 +1391,6 @@ impl ScannerPage {
         }
 
         let copy_button = gtk::Button::with_label(&tr("Copy Details"));
-        copy_button.set_icon_name("edit-copy-symbolic");
         let page_weak = self.downgrade();
         let summary_for_button = summary.clone();
         copy_button.connect_clicked(move |_| {
@@ -1451,6 +1410,9 @@ impl ScannerPage {
     /// A titled preferences row for the details dialog.
     fn detail_row(&self, title: &str, value: Option<&str>, copyable: bool) -> adw::ActionRow {
         let row = adw::ActionRow::new();
+        // Values are plain text: a ping of "< 0.1 ms" is not valid markup
+        // and would otherwise leave the row blank.
+        row.set_use_markup(false);
         row.set_title(title);
         let text = value.filter(|value| !value.is_empty());
         row.set_subtitle(text.unwrap_or(&tr("Unknown")));
@@ -1483,70 +1445,20 @@ impl ScannerPage {
         {
             let mut data = imp.data.borrow_mut();
             if let Some(slot) = data.get_mut(&ip) {
-                *slot = Some(result.clone());
+                *slot = Some(result);
             }
         }
         if online {
             imp.online.set(imp.online.get() + 1);
         }
 
-        let widgets = imp.rows.borrow().get(&ip).cloned();
-        if let Some(widgets) = widgets {
-            widgets.dot.remove_css_class("waiting");
-            widgets.dot.remove_css_class("online");
-            widgets.dot.remove_css_class("offline");
-            if online {
-                widgets.dot.add_css_class("online");
-                widgets.dot.set_tooltip_text(Some(&tr("Online")));
-            } else {
-                widgets.dot.add_css_class("offline");
-                widgets.dot.set_tooltip_text(Some(&tr("Offline")));
-            }
-
-            set_text_or_dash(&widgets.hostname, result.hostname.as_deref());
-            set_text_or_dash(&widgets.mac, result.mac.as_deref());
-            set_text_or_dash(&widgets.vendor, result.vendor.as_deref());
-
-            if result.latency_ms.is_some() {
-                widgets.latency.set_text(&format_latency(result.latency_ms));
-                widgets.latency.remove_css_class("dim-label");
-            } else {
-                widgets.latency.set_text("—");
-                widgets.latency.add_css_class("dim-label");
-            }
-
-            widgets
-                .services
-                .set_text(&services_text(&result.open_ports));
-            widgets
-                .services
-                .set_tooltip_text(services_tooltip(&result.open_ports).as_deref());
-            if result.open_ports.is_empty() {
-                widgets.services.add_css_class("dim-label");
-            } else {
-                widgets.services.remove_css_class("dim-label");
-            }
-
-            widgets.wake.set_sensitive(!online && result.mac.is_some());
-            let wake_tooltip = if online {
-                tr("Device is online")
-            } else if result.mac.is_some() {
-                tr("Wake on LAN")
-            } else {
-                tr("Wake on LAN needs a MAC address")
-            };
-            widgets.wake.set_tooltip_text(Some(&wake_tooltip));
-        }
-
-        if let Some(list) = imp.list.borrow().as_ref() {
-            list.invalidate_filter();
-            if imp
-                .sort_dropdown
-                .borrow()
-                .as_ref()
-                .is_some_and(|dropdown| dropdown.selected() != 0)
-            {
-                list.invalidate_sort();
+        // Replacing the address's item makes the table redraw its row and
+        // run the filter and the sorter on it again.
+        let position = imp.positions.borrow().get(&ip).copied();
+        let store = imp.store.borrow().clone();
+        if let (Some(position), Some(store)) = (position, store) {
+            if position < store.n_items() {
+                store.splice(position, 1, &[glib::BoxedAnyObject::new(ip)]);
             }
         }
         self.update_count_label();
@@ -1565,11 +1477,7 @@ impl ScannerPage {
             bar.set_fraction(fraction);
         }
         if let Some(label) = imp.status_label.borrow().as_ref() {
-            label.set_text(
-                &tr("Scanning… {completed} of {total}")
-                    .replace("{completed}", &completed.to_string())
-                    .replace("{total}", &total.to_string()),
-            );
+            label.set_text(&progress_text(completed, total));
         }
         self.update_count_label();
     }
@@ -1617,31 +1525,6 @@ impl ScannerPage {
         }
         self.update_count_label();
 
-        // TEMP DEBUG
-        {
-            let widths: Vec<i32> = imp
-                .header_cells
-                .borrow()
-                .iter()
-                .map(|cell| cell.width())
-                .collect();
-            eprintln!("SCANNER header widths: {:?}", widths);
-            if let Some((_, row)) = imp.rows.borrow().iter().next() {
-                eprintln!(
-                    "SCANNER row widths: ip={} name={} mac={} vendor={} ping={} services={}",
-                    row.ip.width(),
-                    row.hostname.width(),
-                    row.mac.width(),
-                    row.vendor.width(),
-                    row.latency.width(),
-                    row.services.width()
-                );
-            }
-            if let Some(label) = imp.status_label.borrow().as_ref() {
-                eprintln!("SCANNER status label width: {}", label.width());
-            }
-        }
-
         tracing::info!(
             "Network scan finished: {} online of {} addresses in {:.1}s",
             online,
@@ -1667,9 +1550,10 @@ impl ScannerPage {
                 .replace("{scanned}", &scanned.to_string())
                 .replace("{total}", &total.to_string())
         } else {
+            // A stopped scan covered only part of the range.
             tr("{online} online • {total} scanned")
                 .replace("{online}", &online.to_string())
-                .replace("{total}", &total.to_string())
+                .replace("{total}", &scanned.to_string())
         };
         label.set_text(&text);
     }

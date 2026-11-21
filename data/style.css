@@ -699,23 +699,68 @@ popover.menu contents {
     min-height: 30px;
 }
 
-.scanner-column-header {
-    padding: 0 8px 6px 8px;
+/* The results table sits on the same quiet surface as the scan controls. */
+.scanner-table-frame {
+    background-color: alpha(@window_fg_color, 0.04);
+    border: 1px solid alpha(@window_fg_color, 0.07);
+    border-radius: 12px;
 }
 
-.scanner-list {
-    background: transparent;
+columnview.scanner-table,
+columnview.scanner-table > listview {
+    background: none;
+    color: inherit;
 }
 
-.scanner-list row.scanner-row {
-    padding: 6px 8px;
-    margin: 1px 0;
-    border-radius: 8px;
+columnview.scanner-table > header {
+    border-bottom: 1px solid alpha(@window_fg_color, 0.07);
+}
+
+columnview.scanner-table > header > button {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/* The headers do not sort, so they do not react like buttons either. */
+columnview.scanner-table > header > button:hover,
+columnview.scanner-table > header > button:active {
+    background-color: transparent;
+}
+
+columnview.scanner-table > header > button:hover > box,
+columnview.scanner-table > header > button:active > box {
+    color: alpha(currentColor, 0.6);
+}
+
+/* Inset the first and last columns from the frame's rounded corners. */
+columnview.scanner-table > header > button:first-child,
+columnview.scanner-table > listview > row > cell:first-child {
+    padding-left: 12px;
+}
+
+columnview.scanner-table > header > button:last-child,
+columnview.scanner-table > listview > row > cell:last-child {
+    padding-right: 8px;
+}
+
+columnview.scanner-table > listview > row > cell {
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+columnview.scanner-table > listview > row {
     transition: background-color 140ms ease;
 }
 
-.scanner-list row.scanner-row:hover {
+columnview.scanner-table > listview > row:hover {
     background-color: alpha(@window_fg_color, 0.06);
+}
+
+/* Compact row buttons keep the rows short enough to scan by eye. */
+columnview.scanner-table > listview > row button.flat {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
 }
 
 .scanner-dot {
@@ -735,19 +780,6 @@ popover.menu contents {
 
 .scanner-dot.offline {
     background-color: alpha(@window_fg_color, 0.22);
-}
-
-.scanner-resize-handle {
-    min-width: 8px;
-    background-color: transparent;
-    border-radius: 4px;
-    box-shadow: inset -1px 0 alpha(@window_fg_color, 0.10);
-    transition: background-color 120ms ease;
-}
-
-.scanner-resize-handle:hover {
-    background-color: alpha(@accent_color, 0.22);
-    box-shadow: inset -1px 0 @accent_color;
 }
 
 .scanner-detail-hero {
@@ -785,8 +817,9 @@ popover.menu contents {
     border-color: alpha(@window_fg_color, 0.5);
 }
 
-.network-manager-high-contrast .scanner-resize-handle {
-    box-shadow: inset -1px 0 alpha(@window_fg_color, 0.5);
+.network-manager-high-contrast .scanner-table-frame,
+.network-manager-high-contrast columnview.scanner-table > header {
+    border-color: alpha(@window_fg_color, 0.5);
 }
 
 .network-manager-high-contrast .scanner-detail-hero {
