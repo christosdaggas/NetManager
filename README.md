@@ -2,7 +2,10 @@
 
 <div align="center">
 
-<img width="100%" height="auto" alt="Network Manager" src="docs/app.png" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/workspace-dark.webp">
+  <img width="100%" alt="Tauri workspace showing connection status, live traffic, and saved profiles" src="docs/workspace-light.webp">
+</picture>
 
 **Save your network settings as profiles and switch between them in one click.**
 
@@ -11,6 +14,55 @@ Made for Fedora with the GNOME desktop (tested on Fedora 44).
 </div>
 
 ---
+
+## Tauri desktop workspace (this branch)
+
+The new Linux desktop UI puts the active interface, IPv4 address, gateway,
+resolver, and live receive/transmit rates on one screen. Open **Profiles** to
+create a DHCP or static IPv4 configuration, set DNS, edit a profile, or review
+its actions before applying. **Interfaces** shows link state and hardware
+details; **Activity log** searches the most recent 500 entries.
+
+### Run it on Fedora
+
+```bash
+sudo dnf install cargo gcc gcc-c++ pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel librsvg2-devel
+cargo run --locked --manifest-path src-tauri/Cargo.toml
+```
+
+No Node.js build or development server is needed. `iproute` supplies route and
+address information; profile activation uses NetworkManager's `nmcli` and the
+same Linux helpers as the GTK edition. To build an optimized executable, add
+`--release` to `cargo build --locked --manifest-path src-tauri/Cargo.toml`.
+
+The two editions share the profile library, encryption format, and activity log
+under `~/.local/share/daggas/network-manager/`. Profile activation uses the
+same Rust executor. The Tauri editor preserves settings outside its IPv4/DNS
+form. **Classic tools** opens the separately installed or locally built GTK
+app for advanced editing, encryption setup, scanners, and background services
+(tray, watchdog, scheduler, and automatic switching). These services run only
+in the GTK edition. Finish editing in one window before editing in the other;
+use **Refresh** after returning to the workspace.
+
+The workspace remembers window placement, last page, theme, and sampling
+interval. Traffic history is session-only and sampling stops when Overview is
+not visible. Press **Ctrl+K** for commands, **Ctrl+1–5** to navigate, **Ctrl+N**
+to create a profile, **Ctrl+F** to filter profiles or activity, and **F5** to
+refresh. **Preferences** offers system, light, and dark appearances.
+
+### Verification
+
+```bash
+cargo test --locked
+cargo build --locked --manifest-path src-tauri/Cargo.toml
+python3 scripts/test-tauri-workspace.py
+```
+
+The UI smoke test needs a graphical Linux session, `dbus-run-session`, and
+`WebKitWebDriver` (on Fedora, find its package with
+`dnf provides '*/WebKitWebDriver'`). It opens the actual Tauri window using
+a temporary home directory and a recording `nmcli` stub. The screenshots
+above use sample profiles and anonymized network identifiers.
 
 ## What is it?
 

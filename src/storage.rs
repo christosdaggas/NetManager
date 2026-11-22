@@ -205,7 +205,9 @@ impl DataStore {
 
     /// Load the application configuration.
     pub fn load_config() -> Option<AppConfig> {
-        let config_dir = dirs::home_dir()?.join(".local/share/daggas").join(CONFIG_DIR_NAME);
+        let config_dir = dirs::home_dir()?
+            .join(".local/share/daggas")
+            .join(CONFIG_DIR_NAME);
         let settings_file = config_dir.join("settings.toml");
 
         if !settings_file.exists() {
@@ -315,137 +317,101 @@ impl DataStore {
     pub fn load_profiles_cache(&self) {
         let settings = self.settings();
 
-        // Check for encrypted file first
         let enc_file = self.profiles_cache_file.with_extension("json.enc");
-        if enc_file.exists() {
-            let Some(ref key) = settings.encryption_key else {
-                warn!("Encrypted profiles file exists but no encryption key is unlocked");
-                return;
-            };
-
-            match fs::read_to_string(&enc_file) {
-                Ok(encrypted) => {
-                    let encryption = ProfileEncryption::with_key(key);
-                    match encryption.decrypt_json::<Vec<Profile>>(&encrypted) {
-                        Ok(profiles) => {
-                            let profile_count = profiles.len();
-                            self.write_lock(&self.profiles, "profiles_cache", |cache| {
-                                for profile in profiles {
-                                    cache.insert(profile.id().to_string(), profile);
-                                }
-                            });
-                            self.encrypted_cache_loaded.store(true, Ordering::SeqCst);
-                            info!("Loaded {} encrypted profiles from cache", profile_count);
-                        }
-                        Err(e) => {
-                            // Do not silently fall back to a stale plaintext
-                            // cache when an encrypted one exists. The next save
-                            // replaces the file, so keep a copy first.
-                            warn!("Failed to decrypt profiles: {:?}", e);
-                            if !self.profiles_cache_backed_up.swap(true, Ordering::SeqCst) {
-                                backup_unreadable_file(&enc_file);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to read encrypted profiles: {}", e);
-                }
-            }
+        let encrypted = enc_file.exists();
+        if encrypted && settings.encryption_key.is_none() {
+            warn!("Encrypted profiles file exists but no encryption key is unlocked");
             return;
         }
-
-        // Fall back to unencrypted file
-        if !self.profiles_cache_file.exists() {
-            return;
-        }
-
-        match File::open(&self.profiles_cache_file) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                match serde_json::from_reader::<_, Vec<Profile>>(reader) {
-                    Ok(profiles) => {
-                        let profile_count = profiles.len();
-                        self.write_lock(&self.profiles, "profiles_cache", |cache| {
-                            for profile in profiles {
-                                cache.insert(profile.id().to_string(), profile);
-                            }
-                        });
-                        info!("Loaded {} profiles from cache", profile_count);
+        match self.read_profiles(&settings) {
+            Ok(profiles) => {
+                let count = profiles.len();
+                self.write_lock(&self.profiles, "profiles_cache", |cache| {
+                    for profile in profiles {
+                        cache.insert(profile.id().to_string(), profile);
                     }
-                    Err(e) => {
-                        error!("Failed to parse profiles cache: {}", e);
-                        // The next save replaces the file, so keep a copy first.
-                        if !self.profiles_cache_backed_up.swap(true, Ordering::SeqCst) {
-                            backup_unreadable_file(&self.profiles_cache_file);
-                        }
-                    }
+                });
+                if encrypted {
+                    self.encrypted_cache_loaded.store(true, Ordering::SeqCst);
                 }
+                info!("Loaded {} profiles from cache", count);
             }
             Err(e) => {
-                error!("Failed to open profiles cache: {}", e);
+                error!("Failed to load profiles cache: {}", e);
+                if !self.profiles_cache_backed_up.swap(true, Ordering::SeqCst) {
+                    backup_unreadable_file(if encrypted {
+                        &enc_file
+                    } else {
+                        &self.profiles_cache_file
+                    });
+                }
             }
         }
     }
 
     /// Save profiles cache to disk.
     fn save_profiles_cache(&self) {
-        let profiles: Vec<Profile> = self.profiles();
+        if let Err(e) = self.persist_profiles(&self.profiles(), &self.settings()) {
+            error!("Failed to save profiles: {}", e);
+        }
+    }
+
+    /// Read a complete snapshot or report an error. Editors must not replace
+    /// a locked or unreadable profile library with an empty list.
+    pub fn read_profiles(&self, settings: &AppConfig) -> Result<Vec<Profile>, String> {
+        let enc = self.profiles_cache_file.with_extension("json.enc");
+        if enc.try_exists().map_err(|e| e.to_string())? {
+            let key = settings
+                .encryption_key
+                .as_deref()
+                .ok_or("Unlock profiles first.")?;
+            let ciphertext = fs::read_to_string(enc).map_err(|e| e.to_string())?;
+            return ProfileEncryption::with_key(key)
+                .decrypt_json(&ciphertext)
+                .map_err(|e| e.to_string());
+        }
+        match File::open(&self.profiles_cache_file) {
+            Ok(file) => serde_json::from_reader(BufReader::new(file)).map_err(|e| e.to_string()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    pub fn persist_profiles(
+        &self,
+        profiles: &[Profile],
+        settings: &AppConfig,
+    ) -> Result<(), String> {
         let enc_file = self.profiles_cache_file.with_extension("json.enc");
-
-        // Check if encryption is enabled
-        let settings = self.settings();
-
         if settings.encrypt_profiles {
-            if let Some(ref key) = settings.encryption_key {
-                // Save encrypted
-                let encryption = ProfileEncryption::with_key(key);
-                match encryption.encrypt_json(&profiles) {
-                    Ok(encrypted) => {
-                        // Write atomically with 0600 permissions.
-                        if let Err(e) = write_private_atomic(&enc_file, encrypted.as_bytes()) {
-                            error!("Failed to write encrypted profiles: {}", e);
-                        } else {
-                            self.encrypted_cache_loaded.store(true, Ordering::SeqCst);
-                            // Remove unencrypted file if it exists
-                            let _ = fs::remove_file(&self.profiles_cache_file);
-                            info!("Saved {} encrypted profiles", profiles.len());
-                        }
-                        return;
-                    }
-                    Err(e) => {
-                        error!("Encryption failed; profiles were not saved: {:?}", e);
-                        return;
-                    }
-                }
-            } else {
-                error!("Profile encryption is enabled but no passphrase is unlocked");
-                return;
+            let key = settings
+                .encryption_key
+                .as_deref()
+                .ok_or("Unlock profiles first.")?;
+            let encrypted = ProfileEncryption::with_key(key)
+                .encrypt_json(&profiles)
+                .map_err(|e| e.to_string())?;
+            write_private_atomic(&enc_file, encrypted.as_bytes()).map_err(|e| e.to_string())?;
+            self.encrypted_cache_loaded.store(true, Ordering::SeqCst);
+            if self
+                .profiles_cache_file
+                .try_exists()
+                .map_err(|e| e.to_string())?
+            {
+                fs::remove_file(&self.profiles_cache_file).map_err(|e| e.to_string())?;
             }
+            return Ok(());
         }
-
-        // An encrypted cache that was never unlocked this session was not
-        // loaded, so replacing it would discard every profile in it.
-        if enc_file.exists() && !self.encrypted_cache_loaded.load(Ordering::SeqCst) {
-            error!("Encrypted profiles exist but are not unlocked; profiles were not saved");
-            return;
+        let has_encrypted = enc_file.try_exists().map_err(|e| e.to_string())?;
+        if has_encrypted && !self.encrypted_cache_loaded.load(Ordering::SeqCst) {
+            return Err("Encrypted profiles exist but are not unlocked.".into());
         }
-
-        // Save unencrypted (default), and drop any stale encrypted cache.
-        match serde_json::to_vec_pretty(&profiles) {
-            Ok(json) => {
-                if let Err(e) = write_private_atomic(&self.profiles_cache_file, &json) {
-                    error!("Failed to write profiles cache: {}", e);
-                } else if enc_file.exists() {
-                    if let Err(e) = fs::remove_file(&enc_file) {
-                        warn!("Failed to remove stale encrypted cache: {}", e);
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Failed to serialize profiles cache: {}", e);
-            }
+        let json = serde_json::to_vec_pretty(profiles).map_err(|e| e.to_string())?;
+        write_private_atomic(&self.profiles_cache_file, &json).map_err(|e| e.to_string())?;
+        if has_encrypted {
+            fs::remove_file(&enc_file).map_err(|e| e.to_string())?;
         }
+        Ok(())
     }
 
     /// Save the profiles cache immediately (for example after changing
@@ -747,10 +713,34 @@ mod tests {
         assert!(reopened.encryption_locked());
 
         reopened.update_profiles_cache(vec![Profile::new("New")]);
-        assert_eq!(fs::read(dir.join("profiles_cache.json.enc")).expect("still there"), encrypted);
+        assert_eq!(
+            fs::read(dir.join("profiles_cache.json.enc")).expect("still there"),
+            encrypted
+        );
         assert!(!dir.join("profiles_cache.json").exists());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_editor_snapshot_never_falls_back_from_locked_or_corrupt_data() {
+        let dir = temp_dir("strict-editor");
+        let store = DataStore::with_config_dir(dir.clone());
+        let plain = AppConfig::default();
+        let protected = AppConfig {
+            encrypt_profiles: true,
+            encryption_key: Some("correct passphrase".into()),
+            ..Default::default()
+        };
+        store
+            .persist_profiles(&[Profile::new("Studio")], &protected)
+            .unwrap();
+        fs::write(dir.join("profiles_cache.json"), "[]").unwrap();
+        assert!(store.read_profiles(&plain).is_err());
+        assert_eq!(store.read_profiles(&protected).unwrap()[0].name(), "Studio");
+        fs::write(dir.join("profiles_cache.json.enc"), "truncated").unwrap();
+        assert!(store.read_profiles(&protected).is_err());
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

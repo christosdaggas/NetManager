@@ -18,6 +18,7 @@ mod application;
 mod autostart;
 mod models;
 mod network_utils;
+mod profile_apply;
 mod scheduler;
 mod services;
 mod storage;

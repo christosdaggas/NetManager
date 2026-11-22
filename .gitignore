@@ -1,11 +1,15 @@
 # Build artifacts
 /target/
+/src-tauri/target/
+/src-tauri/gen/
+/core/target/
 /dist/
 
 # Build staging directories
 /build/
 
 # IDE
+.agents/sessions/
 .idea/
 .vscode/
 *.swp

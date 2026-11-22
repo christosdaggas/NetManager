@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Overview · Network Manager</title>
+    <link rel="icon" href="./mark.svg" />
+    <link rel="stylesheet" href="./workspace.css" />
+    <script type="module" src="./workspace.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#page-title">Skip to workspace</a>
+    <aside>
+      <div class="brand">
+        <img src="./mark.svg" alt="" width="38" height="38" />
+        <div>Network Manager<small>CONTROL DESK</small></div>
+      </div>
+      <nav aria-label="Workspace" id="nav"></nav>
+      <div class="station">
+        <span class="station-icon" data-icon="monitor"></span>
+        <div><strong id="host">This computer</strong><small>Local workstation</small></div>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div class="crumb">
+          <span data-icon="panel"></span>Workspace <span>/</span> <b id="crumb">Overview</b>
+        </div>
+        <button id="commands" title="Commands and keyboard shortcuts">
+          <span data-icon="command"></span><span>Commands</span><kbd>Ctrl K</kbd>
+        </button>
+      </header>
+      <div class="page">
+        <div class="eyebrow"><i></i> NETWORK OPERATIONS</div>
+        <div class="page-head">
+          <div>
+            <h1 id="page-title" tabindex="-1">Network overview</h1>
+            <p id="subtitle"></p>
+          </div>
+          <div id="toolbar"></div>
+        </div>
+        <div id="error" role="alert" hidden></div>
+        <div id="view"></div>
+      </div>
+    </main>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div id="notice" role="status"></div>
+  </body>
+</html>

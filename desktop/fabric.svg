@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 220" fill="none">
+  <defs>
+    <pattern id="grid" width="48" height="28" patternUnits="userSpaceOnUse"><path d="m0 0 48 28m0-28L0 28" stroke="#85eac4" stroke-opacity=".10" stroke-width=".8"/></pattern>
+    <radialGradient id="aura"><stop stop-color="#58e6ae" stop-opacity=".26"/><stop offset="1" stop-color="#58e6ae" stop-opacity="0"/></radialGradient>
+    <linearGradient id="top" x2=".8" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#67d3aa"/><stop offset="1" stop-color="#25594e"/></linearGradient>
+    <g id="node"><path fill="#163f35" stroke="#60ac91" d="m0-11 18 10.5v5L0 15-18 4.5v-5Z"/><path fill="#38705b" stroke="#a1edca" d="m0-12 18 10.5L0 9-18-1.5Z"/><circle r="2.3" cy="-2" fill="#c3ffdf"/></g>
+  </defs>
+  <path fill="url(#grid)" d="M0 0h480v220H0z"/>
+  <ellipse cx="279" cy="117" rx="165" ry="96" fill="url(#aura)"/>
+  <g stroke="#69b39a" stroke-width="1.35" stroke-linejoin="round">
+    <path d="m267 116-56 32-39-22-58 33H72m202-34-33 19 24 14-54 32m90-69 48 28 28-16 55 32m-142-61 56-32-21-12 43-25m-98 57-59-34-32 18-62-36"/>
+    <path d="m281 105-65-38 23-13-48-28m112 97 64 37-14 8 35 20m-129-69-49-28-59 34-46-26-49 28" stroke-dasharray="3 5" stroke-opacity=".65"/>
+  </g>
+  <g fill="#bcffe1"><circle cx="72" cy="159" r="3"/><circle cx="211" cy="190" r="3"/><circle cx="432" cy="166" r="3"/><circle cx="388" cy="188" r="2"/><circle cx="191" cy="26" r="2"/></g>
+  <use href="#node" x="116" y="38"/><use href="#node" x="369" y="32"/><use href="#node" x="104" y="99"/>
+  <g stroke-linejoin="round">
+    <path fill="#173b33" stroke="#528675" d="m215 109 64-37 64 37v10l-64 37-64-37z"/>
+    <path fill="#24614c" stroke="#6ab598" d="m215 106 64-37 64 37-64 37z"/>
+    <path fill="#183f35" stroke="#68a78e" d="m215 96 64-37 64 37v9l-64 37-64-37z"/>
+    <path fill="#35715c" stroke="#9bddb9" d="m215 95 64-37 64 37-64 37z"/>
+    <path fill="#225744" stroke="#79c4a0" d="m215 85 64-37 64 37v8l-64 37-64-37z"/>
+    <path fill="url(#top)" stroke="#b6f2cf" stroke-width="1.4" d="m215 84 64-37 64 37-64 37z"/>
+    <path d="m229 84 50-29 50 29-50 29Z" stroke="#d4ffe2" stroke-opacity=".55" stroke-dasharray="3 3"/>
+    <g stroke="#e4ffed" stroke-width="3"><path d="m257 84 24-14 1 27 22-13"/><path d="m259 85 11 6m23-14 10 6"/></g>
+    <g stroke="#caffd7" stroke-width="2.4"><path d="m308 116 5-3m4-2 5-3m4-2 5-3"/></g>
+  </g>
+</svg>
