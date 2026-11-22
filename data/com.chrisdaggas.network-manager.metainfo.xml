@@ -30,7 +30,7 @@
       <li>Configure system settings: hostname, proxy, firewall, printer</li>
       <li>Auto-switch profiles based on conditions (SSID, gateway, time)</li>
       <li>Pre/post scripts for advanced automation</li>
-      <li>Non-blocking, responsive GTK4/libadwaita interface</li>
+      <li>Tauri desktop with live traffic and light and dark themes</li>
     </ul>
     <p>
       The application follows GNOME Human Interface Guidelines and uses 
@@ -39,9 +39,9 @@
   </description>
   
   <url type="homepage">https://chrisdaggas.com</url>
-  <url type="bugtracker">https://github.com/christosdaggas/Network-Manager/issues</url>
-  <url type="help">https://github.com/christosdaggas/Network-Manager#readme</url>
-  <url type="vcs-browser">https://github.com/christosdaggas/Network-Manager</url>
+  <url type="bugtracker">https://github.com/christosdaggas/NetManager/issues</url>
+  <url type="help">https://github.com/christosdaggas/NetManager#readme</url>
+  <url type="vcs-browser">https://github.com/christosdaggas/NetManager</url>
   
   <launchable type="desktop-id">com.chrisdaggas.network-manager.desktop</launchable>
   
@@ -53,13 +53,16 @@
   <screenshots>
     <screenshot type="default">
       <caption>Network Manager dashboard and feature overview</caption>
-      <image>https://raw.githubusercontent.com/christosdaggas/Network-Manager/main/docs/app.png</image>
+      <image>https://raw.githubusercontent.com/christosdaggas/NetManager/main/docs/workspace-light.webp</image>
     </screenshot>
   </screenshots>
   
   <content_rating type="oars-1.1" />
   
   <releases>
+    <release version="1.1.0" date="2026-11-23">
+      <description><p>The Tauri desktop replaces the GTK4 interface and keeps your profiles and settings.</p></description>
+    </release>
     <release version="1.0.0" date="2026-10-22">
       <description>
         <p>First release, made for Fedora with the GNOME desktop:</p>

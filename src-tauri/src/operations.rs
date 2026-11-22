@@ -92,8 +92,8 @@ pub async fn open_location(kind: String) -> Result<(), String> {
     let target = match kind.as_str() {
         "storage" => DataStore::new().config_dir().display().to_string(),
         "website" => "https://chrisdaggas.com".into(),
-        "issues" => "https://github.com/christosdaggas/Network-Manager/issues".into(),
-        "releases" => "https://github.com/christosdaggas/Network-Manager/releases".into(),
+        "issues" => "https://github.com/christosdaggas/NetManager/issues".into(),
+        "releases" => "https://github.com/christosdaggas/NetManager/releases".into(),
         _ => return Err("Unknown location.".into()),
     };
     output("xdg-open", &[&target]).map(|_| ())

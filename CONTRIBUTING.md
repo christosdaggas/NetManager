@@ -9,14 +9,13 @@ Fedora + GNOME is the reference platform for all changes.
 
 ### Prerequisites
 
-- Rust 1.75 or later
-- GTK4 development libraries (gtk4-devel)
-- libadwaita development libraries (libadwaita-devel)
-- GLib development libraries (glib2-devel)
+- Fedora's current Rust toolchain and a C/C++ compiler
+- WebKitGTK 4.1, GTK 3, GLib and OpenSSL development libraries
+- Python 3 and gettext for the embedded UI catalogs
 
 **Fedora:**
 ```bash
-sudo dnf install cargo rust gtk4-devel libadwaita-devel glib2-devel gettext-devel
+sudo dnf install cargo rust gcc-c++ python3 gettext pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel
 ```
 
 ### Development Tools
@@ -71,12 +70,14 @@ The project has no hosted CI, so please run these locally.
 
 ### Architecture
 
-The codebase follows a layered architecture:
+The Cargo workspace builds `src-tauri/` (the installed `network-manager`
+executable) and `core/` (the shared Rust services). The webview loads the
+bundled pages in `desktop/`. The former GTK4 entry point and widgets remain
+in the source tree for reference and are not part of the build.
 
 ```
 src/
-├── main.rs              # Entry point
-├── application.rs       # GTK Application setup, Tokio runtime
+├── core.rs              # Shared library entry point
 ├── storage.rs           # Local data persistence
 ├── tray.rs              # StatusNotifierItem system tray
 ├── network_utils.rs     # Linux sysfs network detection
@@ -132,9 +133,8 @@ After adding or changing strings, run `./scripts/update-translations.sh`. It
 regenerates `po/cd-network-manager.pot` and merges it into every catalog listed
 in `po/LINGUAS`; then translate the new entries in `po/*.po`.
 
-`cargo build` compiles the catalogs into `target/locale`, which the development
-build loads automatically. RPM, DEB and AppImage packages install them under
-`/usr/share/locale`.
+`cargo build` embeds the webview catalogs in the executable. The RPM also
+installs gettext catalogs for Rust services under `/usr/share/locale`.
 
 ## D-Bus Integration
 

@@ -31,3 +31,8 @@ pub mod services {
 pub fn tr(message: &str) -> String {
     gettextrs::gettext(message)
 }
+
+pub fn init_gettext() {
+    gettextrs::setlocale(gettextrs::LocaleCategory::LcMessages, "");
+    let _ = gettextrs::textdomain("network-manager");
+}

@@ -18,7 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "src-tauri/target/debug/network-manager-workspace"
+APP = Path(os.environ.get("NETMANAGER_TEST_BINARY", ROOT / "target/debug/network-manager"))
 
 
 def until(check, seconds=12):

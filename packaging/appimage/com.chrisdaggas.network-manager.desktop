@@ -8,4 +8,4 @@ Terminal=false
 Categories=GTK;GNOME;Network;
 Keywords=network;profile;manager;vpn;dns;ip;
 StartupWMClass=com.chrisdaggas.network-manager
-X-AppImage-Version=0.1.0
+X-AppImage-Version=1.1.0

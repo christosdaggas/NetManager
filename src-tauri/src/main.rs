@@ -24,7 +24,7 @@ fn main() -> tauri::Result<()> {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "-h" | "--help" => {
-                println!("Network Manager\nUsage: network-manager-workspace [--minimized] [--debug] [--version]");
+                println!("Network Manager\nUsage: network-manager [--minimized] [--debug] [--version]");
                 return Ok(());
             }
             "-v" | "--version" => {
@@ -34,6 +34,7 @@ fn main() -> tauri::Result<()> {
             _ => (),
         }
     }
+    netmanager_core::init_gettext();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(w) = app.get_webview_window("main") {

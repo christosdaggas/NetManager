@@ -53,8 +53,9 @@ echo "Building RPM..."
 rpmbuild --define "_topdir $TOPDIR" -bb "$SPEC"
 
 mkdir -p dist/rpm
-find "$TOPDIR/RPMS" -name "*.rpm" -type f -exec cp -v {} dist/rpm/ \;
-
-echo "✓ RPM package created:"
-ls -lh dist/rpm/*.rpm
+while IFS= read -r -d '' rpm; do
+    output="dist/rpm/$(basename "$rpm")"
+    cp "$rpm" "$output"
+    echo "✓ Created $output"
+done < <(find "$TOPDIR/RPMS" -name "*.rpm" -type f -print0)
 echo "=== RPM packaging complete ==="

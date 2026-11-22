@@ -45,10 +45,6 @@ impl TrayState {
     }
 }
 
-/// Icon shown in the panel: a stock symbolic icon, so it exists on every
-/// GNOME system and the panel recolours it to match its light or dark style.
-const TRAY_ICON_NAME: &str = "network-workgroup-symbolic";
-
 /// StatusNotifierItem implementation.
 struct NetworkManagerTray {
     state: Arc<Mutex<TrayState>>,
@@ -89,7 +85,7 @@ impl Tray for NetworkManagerTray {
     }
 
     fn icon_name(&self) -> String {
-        TRAY_ICON_NAME.to_string()
+        crate::APP_ID.to_string()
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {

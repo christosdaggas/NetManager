@@ -104,7 +104,7 @@ function render() {
   document.body.dataset.page = page;
   document.title = `${tr(label)} · ${tr('Network Manager')}`;
   $('heading').textContent = tr(label);
-  $('version').textContent = tr('Version {version}').replace('{version}', lib.version || '1.0.0');
+  $('version').textContent = lib.version ? tr('Version {version}').replace('{version}', lib.version) : '';
   $('page-title').textContent = tr(title || label);
   $('subtitle').textContent = tr(sub);
   $('toolbar').innerHTML =

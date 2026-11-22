@@ -15,7 +15,7 @@ Made for Fedora with the GNOME desktop (tested on Fedora 44).
 
 ---
 
-## Tauri desktop workspace (this branch)
+## Desktop workspace
 
 The Tauri window follows the GTK4 application: **Dashboard**, **Profiles**,
 **Scanner**, **Port Scanner**, **Logs**, **Settings**, and **Help**. The dashboard
@@ -95,11 +95,11 @@ somewhere.
 
 ## Install on Fedora
 
-1. Download the latest `.rpm` file from the [Releases page](https://github.com/christosdaggas/Network-Manager/releases).
+1. Build the RPM as described below, or download a published build from the [Releases page](https://github.com/christosdaggas/NetManager/releases).
 2. Install it:
 
    ```bash
-   sudo dnf install ./network-manager-*.rpm
+   sudo dnf install ./network-manager-1.1.0-1.fc45.x86_64.rpm
    ```
 
 3. Open **Network Manager** from your app grid.
@@ -116,8 +116,8 @@ To remove it later: `sudo dnf remove network-manager`
 ## Build it yourself
 
 ```bash
-sudo dnf install cargo rust gtk4-devel libadwaita-devel glib2-devel gettext-devel rpm-build
-cargo build --release
+sudo dnf install cargo rust gcc-c++ python3 gettext pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel librsvg2-devel rpm-build desktop-file-utils appstream
+cargo build --release --locked
 ./target/release/network-manager
 ```
 
@@ -135,7 +135,7 @@ any personal data.
 
 ## Feedback and contributing
 
-Found a bug or have an idea? [Open an issue](https://github.com/christosdaggas/Network-Manager/issues).
+Found a bug or have an idea? [Open an issue](https://github.com/christosdaggas/NetManager/issues).
 Want to help with the code? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

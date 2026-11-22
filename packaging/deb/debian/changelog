@@ -1,3 +1,9 @@
+cd-network-manager (1.1.0-1) unstable; urgency=medium
+
+  * Use the Tauri desktop with the existing launcher and profile store.
+
+ -- Christos A. Daggas <info@chrisdaggas.com>  Mon, 23 Nov 2026 00:00:00 +0200
+
 cd-network-manager (1.0.0-1) unstable; urgency=medium
 
   * First release, made for Fedora with the GNOME desktop.

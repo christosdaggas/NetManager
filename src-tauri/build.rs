@@ -1,5 +1,5 @@
 fn main() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let root = std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("..");
     let output =
         std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("catalogs.json");
     println!("cargo:rerun-if-changed=../po");

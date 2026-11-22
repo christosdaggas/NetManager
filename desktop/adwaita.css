@@ -219,17 +219,7 @@ small {
   padding-inline: 15px 8px;
 }
 .app-badge {
-  display: grid;
-  place-items: center;
   flex: none;
-  width: 30px;
-  height: 30px;
-  color: white;
-  background: var(--fill);
-  border-radius: 9px;
-}
-.app-badge svg {
-  width: 24px;
   pointer-events: none;
 }
 .side-header button {
@@ -326,7 +316,6 @@ nav button:hover:not([aria-current]),
   position: relative;
   justify-content: flex-end;
   background: var(--surface);
-  border-bottom: 1px solid var(--rule);
   padding-inline: 20px 10px;
 }
 .location {

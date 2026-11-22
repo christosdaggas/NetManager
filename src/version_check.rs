@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 
 /// GitHub repo coordinates
 const GITHUB_OWNER: &str = "christosdaggas";
-const GITHUB_REPO: &str = "network-manager";
+const GITHUB_REPO: &str = "NetManager";
 
 /// Largest release response accepted (512 KiB).
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
