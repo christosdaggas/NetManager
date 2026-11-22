@@ -9,42 +9,39 @@
 
 **Save your network settings as profiles and switch between them in one click.**
 
-Made for Fedora with the GNOME desktop (tested on Fedora 44).
+Made for Fedora Workstation with GNOME.
 
 </div>
 
 ---
 
+## Install on Fedora
+
+**[Download Network Manager 1.1.0 for Fedora 45 (x86_64)](https://github.com/christosdaggas/NetManager/releases/download/v1.1.0/network-manager-1.1.0-1.fc45.x86_64.rpm)** · [Release notes and checksum](https://github.com/christosdaggas/NetManager/releases/tag/v1.1.0)
+
+From the folder containing the downloaded RPM, run:
+
+```bash
+sudo dnf install ./network-manager-1.1.0-1.fc45.x86_64.rpm
+```
+
+Open **Network Manager** from the app grid. The same command upgrades a 1.0.0
+installation. Version 1.1.0 replaces the GTK4 interface with Tauri and keeps
+your profiles, settings, and logs in `~/.local/share/daggas/network-manager/`.
+
 ## Desktop workspace
 
-The Tauri window follows the GTK4 application: **Dashboard**, **Profiles**,
+The workspace has seven pages: **Dashboard**, **Profiles**,
 **Scanner**, **Port Scanner**, **Logs**, **Settings**, and **Help**. The dashboard
 shows the current connection, address, gateway, and DNS in a blue network panel.
 Below it are live traffic, the active profile, service status, and local interfaces.
 The menu in the header contains the theme
 chooser, Preferences, About, and Quit.
 
-### Run it on Fedora
-
-```bash
-sudo dnf install cargo gcc gcc-c++ python3 gettext pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel librsvg2-devel
-cargo run --locked --manifest-path src-tauri/Cargo.toml
-```
-
-No Node.js build or development server is needed. `iproute` supplies route and
-address information; profile activation uses NetworkManager's `nmcli` and the
-same Linux helpers as the GTK edition. To build an optimized executable, add
-`--release` to `cargo build --locked --manifest-path src-tauri/Cargo.toml`.
-
 Profile editors, the switcher, preferences, diagnostics, device details, and
 scheduling/shortcut managers open in separate movable Tauri windows. The two
 scan pages keep their work and results when navigating between pages.
 
-The Tauri executable runs independently and reuses the GTK edition's Rust
-profile executor, storage, encryption, discovery workers, scheduler, watchdog,
-auto-switch engine, and StatusNotifierItem tray. Both editions use the same
-profile library, settings, and log under `~/.local/share/daggas/network-manager/`.
-Run one edition at a time when automatic switching or scheduling is enabled.
 Global profile shortcuts use the desktop's GlobalShortcuts portal when
 available; configured shortcuts also work in the focused window.
 
@@ -92,19 +89,6 @@ somewhere.
 - **Network scanner**: discover devices on your LAN with names, MAC vendors, open services, Wake-on-LAN, and CSV export
 - **Port scanner**: list the open TCP ports of a device, by address or name or straight from the network scanner
 - Follows your GNOME light or dark style
-
-## Install on Fedora
-
-1. Build the RPM as described below, or download a published build from the [Releases page](https://github.com/christosdaggas/NetManager/releases).
-2. Install it:
-
-   ```bash
-   sudo dnf install ./network-manager-1.1.0-1.fc45.x86_64.rpm
-   ```
-
-3. Open **Network Manager** from your app grid.
-
-To remove it later: `sudo dnf remove network-manager`
 
 ## Getting started
 
