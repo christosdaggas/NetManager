@@ -22,7 +22,7 @@ export function profileList(lib, query = '') {
   if (lib.locked)
     return (
       empty('lock', 'Profiles are locked', 'Enter your passphrase to view this library.') +
-      btn('unlock', 'Unlock Profiles', 'lock', 'primary')
+      `<div class="empty-action">${btn('unlock', 'Unlock Profiles', 'lock', 'primary')}</div>`
     );
   const list = lib.profiles.filter((p) =>
     [p.name, p.group, p.description].some((v) => v?.toLowerCase().includes(query.toLowerCase())),
@@ -41,7 +41,7 @@ export function profileList(lib, query = '') {
     .map(
       (
         p,
-      ) => `<li data-id="${esc(p.id)}"><button class="row-name" data-do="apply"><span>${esc(p.name)}</span><small>${esc(p.group || p.description || '')}</small></button>${pill(active === p ? 'Active' : 'Inactive', active === p)}
+      ) => `<li data-id="${esc(p.id)}"><span class="emblem">${icon('layers')}</span><button class="row-name" data-do="apply"><span>${esc(p.name)}</span><small>${esc(p.group || p.description || '')}</small></button>${pill(active === p ? 'Active' : 'Inactive', active === p)}
     ${tool('apply', 'Apply Profile', 'play', active === p ? 'disabled' : '')}${tool('edit', 'Edit Profile', 'edit')}${tool('duplicate', 'Duplicate Profile', 'copy')}${tool('remove', 'Delete Profile', 'trash')}</li>`,
     )
     .join('')}</ul>`;

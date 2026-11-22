@@ -1,21 +1,7 @@
-import {
-  copyText,
-  $,
-  btn,
-  esc,
-  icon,
-  tool,
-  modal,
-  options,
-  foot,
-  invoke,
-  notify,
-  empty,
-  pill,
-  typeName,
-} from './ui.js';
-import { chartCard, sample, stop, togglePause } from './traffic.js';
-import { profileList, latest, editor, saveEditor } from './profiles.js';
+import { copyText, $, btn, esc, icon, tool, modal, options, foot, invoke, notify, empty } from './ui.js';
+import { sample, stop, togglePause } from './traffic.js';
+import { profileList, editor, saveEditor } from './profiles.js';
+import { dashboard } from './dashboard.js';
 import {
   scannerPage,
   mountScanner,
@@ -42,12 +28,12 @@ import { helpPage, shortcuts } from './help.js';
 import { tr, loadCatalog, localize } from './i18n.js';
 
 const pages = {
-  dashboard: ['Dashboard', 'grid', 'Network Manager', 'Manage your system connectivity'],
-  profiles: ['Profiles', 'users', '', ''],
+  dashboard: ['Dashboard', 'grid', 'Network overview', 'Manage your system connectivity'],
+  profiles: ['Profiles', 'layers', 'Profiles', 'Manage saved network configurations'],
   scanner: ['Scanner', 'search', 'Network Scanner', 'Discover devices on your local network'],
   ports: ['Port Scanner', 'monitor', 'Port Scanner', 'Find the open TCP ports of a device'],
   logs: ['Logs', 'log', 'Application Logs', ''],
-  settings: ['Settings', 'settingsTools', '', ''],
+  settings: ['Settings', 'settings', '', ''],
   help: ['Help', 'info', 'Help', 'Learn how to use Network Manager'],
 };
 let page = Object.hasOwn(pages, localStorage.page) ? localStorage.page : 'dashboard';
@@ -104,45 +90,35 @@ function render() {
   const [label, , title, sub] = pages[page];
   applyTheme();
   drawMenu();
-  $('nav').innerHTML = Object.entries(pages)
-    .map(
-      ([key, [n, g]]) =>
-        `<button data-page="${key}" title="${esc(tr(n))}" aria-label="${esc(tr(n))}" ${key === page ? 'aria-current="page"' : ''}>${icon(g)}<span class="side-label">${esc(tr(n))}</span></button>`,
-    )
-    .join('');
+  const navGroup = (name, keys) =>
+    `<div class="nav-group" role="group" aria-label="${esc(tr(name))}"><span class="nav-label" aria-hidden="true">${esc(tr(name))}</span>${keys
+      .map((key) => {
+        const [n, g] = pages[key];
+        return `<button data-page="${key}" title="${esc(tr(n))}" aria-label="${esc(tr(n))}" ${key === page ? 'aria-current="page"' : ''}>${icon(g)}<span class="side-label">${esc(tr(n))}</span></button>`;
+      })
+      .join('')}</div>`;
+  $('nav').innerHTML =
+    navGroup('Workspace', ['dashboard', 'profiles', 'scanner', 'ports', 'logs']) +
+    navGroup('Application', ['settings', 'help']);
   document.body.dataset.page = page;
   document.title = `${tr(label)} · ${tr('Network Manager')}`;
-  $('heading').textContent = page === 'dashboard' ? '' : tr(label);
+  $('heading').textContent = tr(label);
   $('version').textContent = tr('Version {version}').replace('{version}', lib.version || '1.0.0');
   $('page-title').textContent = tr(title || label);
   $('subtitle').textContent = tr(sub);
-  $('toolbar').innerHTML = ['scanner', 'ports'].includes(page)
-    ? tool('scan-export', 'Export Results', 'up')
-    : '';
+  $('toolbar').innerHTML =
+    page === 'dashboard'
+      ? btn('refresh', 'Refresh', 'refresh') + btn('new', 'New Profile', 'plus', 'primary')
+      : ['scanner', 'ports'].includes(page)
+        ? tool('scan-export', 'Export Results', 'up')
+        : '';
   if (page === 'dashboard') {
-    const active = latest(lib.profiles),
-      a = net.adapters.find((a) => a.name === net.primary);
-    const facts = [
-      ['IP Address', net.address],
-      ['Gateway', net.gateway],
-      ['DNS Servers', net.dns.join(', ')],
-      [
-        'Connection',
-        net.primary
-          ? `${a ? typeName(a.adapter_type) : 'Network'} (${net.connection || net.primary})`
-          : 'Disconnected',
-      ],
-    ];
-    $('view').innerHTML =
-      `<section class="quick"><div><h2>${icon('settings')} Quick Actions</h2><p>Refresh status or switch to another profile</p></div><div class="actions">${btn('refresh', 'Refresh', null, 'primary')}${btn('switch', 'Switch Profile')}${btn('new', 'New Profile')}</div></section>
-    <div class="dash-pair"><section><h2>${icon('users')} Active Profile</h2><div class="status-value"><strong>${esc(lib.locked ? 'Profiles locked' : active?.name || 'No profile active')}</strong>${pill(active ? 'Active' : 'Inactive', !!active)}</div><p>${active ? 'Applied: ' + esc(new Date(active.applied_at).toLocaleString()) : 'Never applied'}</p></section>
-    <section><h2>${icon('settings')} Service Status</h2><div class="service-state">${icon(net.service ? 'check' : 'server')}<div><strong>${net.service == null ? 'Checking…' : net.service ? 'Running' : 'Not Running'}</strong><p>NetworkManager handles network configuration</p></div></div>${net.service === false ? btn('start-service', 'Start Service') : ''}</section></div>
-    <div class="dash-pair network-pair"><section><h2>${icon('route')} Current Network</h2><dl id="network-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v || '—')}</dd></div>`).join('')}</dl></section>${chartCard()}</div>`;
+    $('view').innerHTML = dashboard(net, lib);
     sample(invoke, '*', interval);
   } else if (page === 'profiles' || page === 'logs') {
     const p = page === 'profiles';
     $('view').innerHTML =
-      `<div class="list-toolbar">${!p ? '<strong>Application Logs</strong>' : ''}<input id="query" type="search" aria-label="Search ${page}" value="${esc(query)}" placeholder="Search ${page}…">
+      `<div class="list-toolbar"><input id="query" type="search" aria-label="Search ${page}" value="${esc(query)}" placeholder="Search ${page}…">
     ${
       p
         ? btn('new', 'Create Profile', 'plus', 'primary') +
@@ -165,11 +141,6 @@ function render() {
     $('view').innerHTML = scannerPage(page);
     mountScanner(page);
   }
-  $('view')
-    .querySelectorAll(
-      '.quick h2,.quick p,.dash-pair h2,#network-facts dt,.service-state p,.service-state strong,.help-topic h2,.list-toolbar strong',
-    )
-    .forEach((e) => (e.dataset.i18n = ''));
   localize($('view'));
 }
 function logLines() {
@@ -674,6 +645,11 @@ async function boot() {
     return;
   }
   $('main-menu').innerHTML = icon('menu');
+  $('location-root').textContent = tr('Workspace');
+  const guide = $('shortcut-guide');
+  guide.title = tr('Keyboard Shortcuts') + ' (Ctrl+?)';
+  guide.setAttribute('aria-label', tr('Keyboard Shortcuts'));
+  guide.innerHTML = icon('command') + `<span class="side-label">${esc(tr('Keyboard Shortcuts'))}</span>`;
   sidebar();
   render();
   await window.__TAURI__.event.listen('profile-request', ({ payload }) => {

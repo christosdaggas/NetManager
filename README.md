@@ -18,9 +18,10 @@ Made for Fedora with the GNOME desktop (tested on Fedora 44).
 ## Tauri desktop workspace (this branch)
 
 The Tauri window follows the GTK4 application: **Dashboard**, **Profiles**,
-**Scanner**, **Port Scanner**, **Logs**, **Settings**, and **Help**. The
-dashboard puts Quick Actions above Active Profile, Service Status, Current
-Network and Network Activity. The menu in the header contains the theme
+**Scanner**, **Port Scanner**, **Logs**, **Settings**, and **Help**. The dashboard
+shows the current connection, address, gateway, and DNS in a blue network panel.
+Below it are live traffic, the active profile, service status, and local interfaces.
+The menu in the header contains the theme
 chooser, Preferences, About, and Quit.
 
 ### Run it on Fedora

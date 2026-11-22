@@ -132,6 +132,7 @@ def smoke(home, previews=None):
         act("pause-traffic")
         wait("document.querySelector('#sample-state').textContent==='Paused'")
         act("pause-traffic")
+        act("switch");act("close")
         act("new")
         wait("document.querySelector('#profile-editor')")
         val("#template","1","change")
@@ -224,6 +225,10 @@ def smoke(home, previews=None):
         assert js("""const main=document.querySelector('main');main.scrollTop=main.scrollHeight;
            const r=document.querySelector('.sidebar').getBoundingClientRect();
            return main.scrollTop>0 && main.scrollWidth<=main.clientWidth && r.top===0 && Math.abs(r.height-innerHeight)<1""")
+        for page in ["dashboard","profiles","scanner","ports","logs","settings","help"]:
+            nav(page)
+            assert js("""const m=document.querySelector('main');
+                return m.scrollWidth<=m.clientWidth && document.querySelector('#page-title').offsetHeight>0"""), page
         toggle_sidebar()
         api(session + "/window/rect", {"width": 1152, "height": 680})
         api(session + "/refresh", {})
@@ -237,6 +242,8 @@ def smoke(home, previews=None):
         wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'false'")
         shortcut()
         wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'true'")
+        if previews:
+            api(session+"/window/rect",{"width":1200,"height":760})
         for theme in ["light","dark"]:
             nav("settings");val("#opt-theme",theme,"change")
             wait(f"document.documentElement.dataset.theme==='{theme}'")
@@ -246,9 +253,14 @@ def smoke(home, previews=None):
             if previews:
                 wait("(document.querySelector('#in-line')?.getAttribute('d')||'').split('L').length>=6")
                 js("""const cells=document.querySelectorAll('#network-facts dd');
-                    ['192.0.2.24/24','192.0.2.1','192.0.2.53','Wi-Fi (Studio)'].forEach((s,i)=>cells[i].textContent=s);
-                    document.querySelector('.status-value strong').textContent='Studio';
-                    document.querySelector('.status-value+p').textContent='Applied: 09:41';""")
+                    ['192.0.2.24/24','192.0.2.1','192.0.2.53'].forEach((s,i)=>cells[i].textContent=s);
+                    document.querySelector('#connection-heading').textContent='Studio';
+                    const primary=document.querySelector('.connection-meta code');
+                    const names=new Map([...document.querySelectorAll('.interface strong')].map((el,i)=>[el.textContent,'net'+i]));
+                    if(primary)primary.textContent=names.get(primary.textContent)||'net0';
+                    document.querySelectorAll('.interface strong').forEach(el=>el.textContent=names.get(el.textContent));
+                    document.querySelector('.profile-current strong').textContent='Studio';
+                    document.querySelector('.profile-current p').textContent='Applied: 09:41';""")
                 capture(theme)
         if previews:
             toggle_sidebar();capture("compact")

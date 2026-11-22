@@ -15,9 +15,9 @@ export function chartCard() {
     key,
     caption,
     glyph,
-  ) => `<div class="metric ${key}"><small>${icon(glyph)}${caption}</small>
+  ) => `<div class="metric ${key}"><small data-i18n>${icon(glyph)}${caption}</small>
     <div class="reading"><b id="${key}">—</b><span id="${key}-unit"></span></div></div>`;
-  return `<section class="card traffic"><div class="card-head"><h2>${icon('pulse')} Network Activity</h2>
+  return `<section class="card traffic"><div class="card-head"><h2 data-i18n>${icon('pulse')} Network Activity</h2>
     <div class="sampling"><small id="sample-state">Collecting samples</small><button type="button" class="tool" id="pause-traffic" data-do="pause-traffic" aria-label="Pause traffic sampling" title="Pause traffic sampling" disabled>${icon('pause')}</button></div></div>
     <div class="rates">${metric('rx', 'Download', 'down')}${metric('tx', 'Upload', 'up')}</div>
     <div class="graph"><div class="y-axis" aria-hidden="true"><span id="scale-high">—</span><span id="scale-mid">—</span><span>0</span></div>

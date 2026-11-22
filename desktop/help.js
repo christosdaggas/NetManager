@@ -6,7 +6,7 @@ const topics = [
   ],
   [
     'Dashboard',
-    'Review your active profile, NetworkManager service status, IPv4 address, gateway, DNS servers, and network activity. Use Quick Actions to refresh, switch profiles, or create a profile.',
+    'Check your connection, IPv4 address, gateway, and DNS servers in the network panel. Refresh or create a profile from the page header. Below the live traffic chart you can inspect your interfaces; the Active Profile card lets you switch profiles and check the NetworkManager service.',
   ],
   [
     'Network Scanner',
@@ -38,7 +38,7 @@ const topics = [
   ],
 ];
 export function helpPage() {
-  return `<div class="help-actions">${btn('shortcuts', 'Keyboard Shortcuts')}${btn('diagnostics', 'Network Diagnostics')}${btn('copy-network', 'Copy Network Info', 'copy')}</div>${topics.map(([h, p]) => `<section class="help-topic"><h2>${esc(h)}</h2><p>${esc(p)}</p></section>`).join('')}`;
+  return `<div class="help-actions">${btn('shortcuts', 'Keyboard Shortcuts', 'command')}${btn('diagnostics', 'Network Diagnostics', 'pulse')}${btn('copy-network', 'Copy Network Info', 'copy')}</div><div class="topic-grid">${topics.map(([h, p]) => `<section class="help-topic"><h2 data-i18n>${esc(h)}</h2><p data-i18n>${esc(p)}</p></section>`).join('')}</div>`;
 }
 export function shortcuts() {
   modal(

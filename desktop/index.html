@@ -12,14 +12,28 @@
     <a class="skip" href="#page-title">Skip to content</a>
     <aside class="sidebar" aria-label="Application sidebar">
       <div class="side-header" data-tauri-drag-region>
+        <span class="app-badge" aria-hidden="true" data-tauri-drag-region
+          ><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M8 22V10l16 12V10" />
+            <g fill="currentColor" stroke="none">
+              <circle cx="8" cy="10" r="3" />
+              <circle cx="8" cy="22" r="3" />
+              <circle cx="24" cy="10" r="3" />
+              <circle cx="24" cy="22" r="3" />
+            </g></svg
+        ></span>
         <strong data-tauri-drag-region>Network Manager</strong
         ><button id="sidebar-toggle" data-do="sidebar" aria-controls="nav" aria-expanded="true"></button>
       </div>
       <nav id="nav" aria-label="Workspace"></nav>
+      <div class="side-footer"><button id="shortcut-guide" data-do="shortcuts"></button></div>
     </aside>
     <div class="content-shell">
       <header class="content-header" data-tauri-drag-region>
-        <strong id="heading" data-tauri-drag-region></strong>
+        <div class="location" data-tauri-drag-region>
+          <span id="location-root" data-tauri-drag-region></span><span aria-hidden="true">/</span
+          ><strong id="heading" data-tauri-drag-region></strong>
+        </div>
         <button
           id="main-menu"
           class="icon-btn"

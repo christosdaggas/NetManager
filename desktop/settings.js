@@ -3,8 +3,21 @@ import { $, esc, icon, btn, tool, options, modal, foot, invoke, notify } from '.
 import { tr } from './i18n.js';
 const row = (title, sub, control, forId) =>
   `<div class="setting-row"><div>${forId ? `<label for="${esc(forId)}">${esc(tr(title))}</label>` : `<strong>${esc(tr(title))}</strong>`}<small>${esc(tr(sub))}</small></div>${control}</div>`;
+const groupIcons = {
+  Appearance: 'monitor',
+  'Auto-Switch': 'route',
+  Behavior: 'settings',
+  Storage: 'server',
+  'Backup & Restore': 'layers',
+  Scheduling: 'clock',
+  'Connection Watchdog': 'pulse',
+  Security: 'lock',
+  'Keyboard Shortcuts': 'command',
+  About: 'info',
+  Profiles: 'layers',
+};
 const group = (title, rows) =>
-  `<section class="pref-group"><h2>${esc(tr(title))}</h2><div>${rows.join('')}</div></section>`;
+  `<section class="pref-group"><h2>${icon(groupIcons[title] || 'settings')}${esc(tr(title))}</h2><div>${rows.join('')}</div></section>`;
 const value = (cfg, k) => k.split('.').reduce((v, p) => v?.[p], cfg);
 function control(cfg, k, title, sub, kind, choices) {
   const id = 'opt-' + k,
