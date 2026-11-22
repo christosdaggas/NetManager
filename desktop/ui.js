@@ -80,7 +80,15 @@ export function notify(message) {
 }
 export function modal(title, body) {
   const d = $('dialog');
-  d.innerHTML = `<div class="dialog-head"><h2 id="dialog-title">${esc(tr(title))}</h2><button class="icon-btn" aria-label="${esc(tr('Close'))}" data-do="close">${icon('close')}</button></div>${body}<p id="dialog-error" role="alert" hidden></p>`;
+  const text = tr(title);
+  let header = '';
+  if (window.__NM_UTILITY__) {
+    $('heading').textContent = document.title = text;
+    d.setAttribute('aria-labelledby', 'heading');
+  } else {
+    header = `<div class="dialog-head"><h2 id="dialog-title">${esc(text)}</h2><button class="icon-btn" aria-label="${esc(tr('Close'))}" data-do="close">${icon('close')}</button></div>`;
+  }
+  d.innerHTML = `${header}${body}<p id="dialog-error" role="alert" hidden></p>`;
   if (!d.open) window.__NM_UTILITY__ ? d.show() : d.showModal();
   return d;
 }

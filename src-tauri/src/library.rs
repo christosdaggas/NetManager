@@ -7,7 +7,7 @@ use netmanager_core::{
 };
 use serde_json::{json, Value};
 use std::sync::{Mutex, MutexGuard};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use zeroize::Zeroizing;
 
 #[derive(Default)]
@@ -240,6 +240,7 @@ pub async fn encryption(
 }
 #[tauri::command]
 pub async fn save_setting(
+    app: AppHandle,
     state: State<'_, Library>,
     field: String,
     value: Value,
@@ -294,7 +295,12 @@ pub async fn save_setting(
             netmanager_core::autostart::disable_autostart()?;
         }
     }
-    s.save_config(&next).map_err(|e| e.to_string())
+    s.save_config(&next).map_err(|e| e.to_string())?;
+    if field == "theme" {
+        app.emit("theme-changed", next.theme)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 #[tauri::command]
 pub async fn clear_logs(state: State<'_, Library>) -> Result<(), String> {

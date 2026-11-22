@@ -23,6 +23,7 @@ pub async fn open_utility(app: AppHandle, kind: String, data: Option<Value>) -> 
     let label = format!("utility-{}", uuid::Uuid::new_v4());
     WebviewWindowBuilder::new(&app, label, WebviewUrl::App("index.html".into()))
         .title(title)
+        .decorations(false)
         .inner_size(w, h)
         .min_inner_size(350., 260.)
         .prevent_overflow()

@@ -58,6 +58,7 @@ const changed = (profilesPage = false) =>
 const openWindow = (kind, data = null) => invoke('open_utility', { kind, data });
 function applyTheme() {
   const t = lib.settings?.theme || localStorage.theme || 'system';
+  if (lib.settings && localStorage.theme !== t) localStorage.theme = t;
   document.documentElement.dataset.theme = t === 'system' ? (scheme.matches ? 'dark' : 'light') : t;
 }
 function sidebar() {
@@ -440,7 +441,12 @@ async function run(fn, b) {
 }
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
-  if (!b || busy || b.disabled) return;
+  if (!b || b.disabled) return;
+  if (b.closest('.window-controls')) {
+    action(b.dataset.do, b).catch((err) => notify(String(err)));
+    return;
+  }
+  if (busy) return;
   if (menu.contains(b)) menu.hidePopover?.();
   if (b.dataset.page) {
     navigate(b.dataset.page);
@@ -607,10 +613,18 @@ document.addEventListener('visibilitychange', () => {
   else if (page === 'dashboard' && !busy && !dialog.open) refresh();
 });
 async function boot() {
+  document.body.classList.toggle('utility', !!utility);
+  applyTheme();
+  await window.__TAURI__.event.listen('theme-changed', ({ payload }) => {
+    localStorage.theme = payload;
+    if (lib.settings) lib.settings.theme = payload;
+    applyTheme();
+    if ($('opt-theme')) $('opt-theme').value = payload;
+    if (!utility) drawMenu();
+  });
   await loadCatalog();
   document.querySelector('.side-header strong').textContent = tr('Network Manager');
   if (utility) {
-    document.body.classList.add('utility');
     [net, lib] = await Promise.all([invoke('network_snapshot'), invoke('library_view')]);
     applyTheme();
     switch (utility.kind) {

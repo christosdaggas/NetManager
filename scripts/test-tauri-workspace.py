@@ -108,11 +108,16 @@ def smoke(home, previews=None):
         def act(action):
             nonlocal active_window
             handles=api(session+"/window/handles")
-            click(f'[data-do="{action}"]')
+            control = "window-close" if action=="close" and active_window!=main_handle else action
+            click(f'[data-do="{control}"]')
             if action in ["new","edit","switch","preferences","diagnostics","schedules","hotkeys","rules","scan-details"]:
                 active_window=until(lambda:next((w for w in api(session+"/window/handles") if w not in handles),None))
                 api(session+"/window",{"handle":active_window})
                 wait("document.querySelector('dialog[open]') && !document.body.hasAttribute('aria-busy')")
+                assert js("""const h=document.querySelector('.content-header');
+                    return h.getBoundingClientRect().top===0 && h.offsetHeight>0 &&
+                        document.querySelector('#heading').textContent===document.title &&
+                        document.querySelector('[data-do="window-close"]').offsetWidth>0""")
             elif action=="close" and active_window!=main_handle:
                 closed()
         def closed():
@@ -172,7 +177,7 @@ def smoke(home, previews=None):
         submit("#scan-form")
         wait("document.querySelector('#scan-status').textContent.startsWith('Scan complete')")
         act("scan-details")
-        wait("document.querySelector('#dialog-title')?.textContent==='Device Details'")
+        wait("document.querySelector('#heading')?.textContent==='Device Details'")
         act("scan-copy-field")
         act("close")
         nav("ports")
@@ -244,9 +249,23 @@ def smoke(home, previews=None):
         wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'true'")
         if previews:
             api(session+"/window/rect",{"width":1200,"height":760})
+        # Keep an editor open across theme changes. Updating chrome must not
+        # rebuild the form or discard unsaved input.
+        nav("dashboard")
+        act("new")
+        editor=active_window
+        val("#p-name","Unsaved draft")
+        active_window=main_handle
+        api(session+"/window",{"handle":main_handle})
         for theme in ["light","dark"]:
             nav("settings");val("#opt-theme",theme,"change")
             wait(f"document.documentElement.dataset.theme==='{theme}'")
+            bar_color=js("return getComputedStyle(document.querySelector('.content-header')).backgroundColor")
+            api(session+"/window",{"handle":editor})
+            wait(f"document.documentElement.dataset.theme==='{theme}'")
+            assert js("""return getComputedStyle(document.querySelector('.content-header')).backgroundColor
+                ===arguments[0] && document.querySelector('#p-name').value==='Unsaved draft'""",bar_color)
+            api(session+"/window",{"handle":main_handle})
             if previews:
                 val("#interval","1000","change")
             nav("dashboard")
@@ -264,6 +283,9 @@ def smoke(home, previews=None):
                 capture(theme)
         if previews:
             toggle_sidebar();capture("compact")
+        active_window=editor
+        api(session+"/window",{"handle":editor})
+        act("close")
         print("All seven native Tauri pages passed: profile CRUD/apply/import, both loopback scanners, logs, encryption rotation, schedules, hotkeys, preferences, sidebar and themes.")
     finally:
         try:
