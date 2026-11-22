@@ -366,9 +366,11 @@ impl DataStore {
                 .as_deref()
                 .ok_or("Unlock profiles first.")?;
             let ciphertext = fs::read_to_string(enc).map_err(|e| e.to_string())?;
-            return ProfileEncryption::with_key(key)
+            let profiles = ProfileEncryption::with_key(key)
                 .decrypt_json(&ciphertext)
-                .map_err(|e| e.to_string());
+                .map_err(|e| e.to_string())?;
+            self.encrypted_cache_loaded.store(true, Ordering::SeqCst);
+            return Ok(profiles);
         }
         match File::open(&self.profiles_cache_file) {
             Ok(file) => serde_json::from_reader(BufReader::new(file)).map_err(|e| e.to_string()),

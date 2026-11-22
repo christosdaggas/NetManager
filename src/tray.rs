@@ -164,6 +164,7 @@ impl Tray for NetworkManagerTray {
 
 /// Handle for the running tray service.
 pub struct TrayHandle {
+    runtime: &'static tokio::runtime::Runtime,
     handle: ksni::Handle<NetworkManagerTray>,
     state: Arc<Mutex<TrayState>>,
 }
@@ -188,7 +189,7 @@ impl TrayHandle {
     fn refresh(&self) {
         // The menu is rebuilt by the tray service; ask it to republish the
         // layout and properties after a state change.
-        let _ = crate::application::tokio_runtime().block_on(self.handle.update(|_| ()));
+        let _ = self.runtime.block_on(self.handle.update(|_| ()));
     }
 
     /// Stop the tray service.
@@ -201,7 +202,7 @@ impl TrayHandle {
 ///
 /// Returns `None` when the desktop has no StatusNotifierWatcher (for example
 /// stock GNOME without the AppIndicator extension).
-pub fn start_tray() -> Option<(TrayHandle, Receiver<TrayCommand>)> {
+pub fn start_tray(runtime: &'static tokio::runtime::Runtime) -> Option<(TrayHandle, Receiver<TrayCommand>)> {
     let (tx, rx) = channel();
     let state = Arc::new(Mutex::new(TrayState {
         profiles: Vec::new(),
@@ -213,11 +214,11 @@ pub fn start_tray() -> Option<(TrayHandle, Receiver<TrayCommand>)> {
         state: Arc::clone(&state),
     };
 
-    let result = crate::application::tokio_runtime().block_on(tray.spawn());
+    let result = runtime.block_on(tray.spawn());
     match result {
         Ok(handle) => {
             info!("System tray icon registered");
-            Some((TrayHandle { handle, state }, rx))
+            Some((TrayHandle { handle, state, runtime }, rx))
         }
         Err(error) => {
             info!("System tray unavailable: {}", error);

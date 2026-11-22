@@ -119,9 +119,9 @@ pub fn parse_targets(input: &str) -> Result<Vec<Ipv4Addr>, RangeError> {
         // A /24 and wider contain network and broadcast addresses that no
         // host can answer on; skip them when the block is wide enough.
         let (first, last) = if prefix <= 30 {
-            (network + 1, network + total as u32 - 2)
+            (network + 1, network + (total as u32 - 2))
         } else {
-            (network, network + total as u32 - 1)
+            (network, network + (total as u32 - 1))
         };
 
         return Ok((first..=last).map(Ipv4Addr::from).collect());
@@ -145,8 +145,8 @@ pub fn parse_targets(input: &str) -> Result<Vec<Ipv4Addr>, RangeError> {
             return Err(RangeError::Invalid);
         }
 
-        let count = u32::from(end) - u32::from(start) + 1;
-        if count as usize > MAX_TARGETS {
+        let count = u64::from(u32::from(end) - u32::from(start)) + 1;
+        if count > MAX_TARGETS as u64 {
             return Err(RangeError::TooMany(count as usize));
         }
 
@@ -558,6 +558,12 @@ pub fn send_wake_on_lan(mac: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn range_count_and_last_subnet_do_not_wrap() {
+        assert!(matches!(super::parse_targets("0.0.0.0-255.255.255.255"),Err(super::RangeError::TooMany(_))));
+        assert_eq!(super::parse_targets("255.255.255.252/30").unwrap().len(),2);
+        assert_eq!(super::parse_targets("255.255.255.255/32").unwrap().len(),1);
+    }
     use super::*;
 
     #[test]

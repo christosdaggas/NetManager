@@ -2,59 +2,58 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Overview · Network Manager</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dashboard · Network Manager</title>
     <link rel="icon" href="./mark.svg" />
-    <link rel="stylesheet" href="./workspace.css" />
+    <link rel="stylesheet" href="./adwaita.css" />
     <script type="module" src="./workspace.js"></script>
   </head>
   <body>
-    <a class="skip" href="#page-title">Skip to workspace</a>
+    <a class="skip" href="#page-title">Skip to content</a>
     <aside class="sidebar" aria-label="Application sidebar">
-      <div class="brand">
-        <img src="./mark.svg" alt="" width="32" height="32" />
-        <strong>Network Manager</strong>
+      <div class="side-header" data-tauri-drag-region>
+        <strong data-tauri-drag-region>Network Manager</strong
+        ><button id="sidebar-toggle" data-do="sidebar" aria-controls="nav" aria-expanded="true"></button>
       </div>
-      <div class="sidebar-scroll">
-        <button
-          id="commands"
-          title="Commands and keyboard shortcuts (Ctrl K)"
-          aria-label="Commands and keyboard shortcuts"
-        >
-          <span data-icon="search"></span><span class="side-label">Commands</span><kbd>Ctrl K</kbd>
-        </button>
-        <nav aria-label="Workspace" id="nav"></nav>
-        <button class="side-action" data-do="classic" title="Classic tools" aria-label="Classic tools">
-          <span data-icon="ext"></span><span class="side-label">Classic tools</span>
-        </button>
-      </div>
-      <footer class="sidebar-foot">
-        <button
-          id="sidebar-toggle"
-          class="side-action"
-          type="button"
-          aria-controls="nav"
-          aria-expanded="true"
-          aria-label="Collapse sidebar"
-          title="Collapse sidebar (Ctrl B)"
-        >
-          <span data-icon="collapse"></span><span class="side-label">Collapse sidebar</span>
-        </button>
-      </footer>
+      <nav id="nav" aria-label="Workspace"></nav>
     </aside>
-    <main>
-      <div class="page">
-        <div class="page-head">
-          <div>
-            <h1 id="page-title" tabindex="-1">Overview</h1>
-            <p id="subtitle"></p>
-          </div>
-          <div id="toolbar"></div>
+    <div class="content-shell">
+      <header class="content-header" data-tauri-drag-region>
+        <strong id="heading" data-tauri-drag-region></strong>
+        <button
+          id="main-menu"
+          class="icon-btn"
+          title="Main Menu"
+          aria-label="Main Menu"
+          popovertarget="menu"
+        >
+          ☰
+        </button>
+        <div id="menu" popover="auto" aria-label="Main Menu"></div>
+        <div class="window-controls">
+          <button data-do="minimize" aria-label="Minimize" title="Minimize">−</button
+          ><button data-do="maximize" aria-label="Maximize or restore" title="Maximize or restore">□</button
+          ><button data-do="window-close" aria-label="Close window" title="Close window">×</button>
         </div>
-        <div id="error" role="alert" hidden></div>
-        <div id="view"></div>
-      </div>
-    </main>
+      </header>
+      <main>
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h1 id="page-title" tabindex="-1"></h1>
+              <p id="subtitle"></p>
+            </div>
+            <div id="toolbar"></div>
+          </div>
+          <p id="error" role="alert" hidden></p>
+          <div id="view"></div>
+        </div>
+      </main>
+      <footer class="status-bar">
+        <button hidden data-do="releases" id="update"></button><span id="version"></span>
+      </footer>
+    </div>
+    <input type="file" id="import-file" accept=".json,application/json" hidden />
     <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
     <div id="notice" role="status"></div>
   </body>

@@ -1,4 +1,16 @@
+import { tr } from './i18n.js';
 const paths = {
+  settingsTools:
+    'm14 7 3-4a5 5 0 0 0-6 6L3 17a2.5 2.5 0 0 0 4 4l8-9a5 5 0 0 0 6-6l-4 3zM3 3l4 2 1 3-2 1-3-4zm10 12 6 6a1.5 1.5 0 0 0 2-2l-6-6',
+  info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 11v6m0-10v1',
+  users: 'M15 20H3v-2c0-3 3-5 6-5s6 2 6 5zm-2-13a4 4 0 1 1-8 0 4 4 0 0 1 8 0zm5 3v6m-3-3h6',
+  scan: 'M3 8V3h5m8 0h5v5m0 8v5h-5M8 21H3v-5m4-4h10',
+  edit: 'm4 16 11-11 4 4L8 20H4zm9-9 4 4',
+  copy: 'M8 8h12v13H8zM4 16H3V3h12v2',
+  trash: 'M3 6h18M6 6l1 15h10l1-15M9 6V3h6v3m-5 4v7m4-7v7',
+  check: 'm3 12 6 6L21 5',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  help: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3v.1',
   collapse: 'M3 4h18v16H3zM9 4v16m7-11-3 3 3 3',
   expand: 'M3 4h18v16H3zM9 4v16m4-11 3 3-3 3',
   pause: 'M8 5v14M16 5v14',
@@ -38,12 +50,24 @@ export const esc = (value) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   );
 export const $ = (id) => document.getElementById(id);
+export const invoke = (name, args = {}) => window.__TAURI__.core.invoke(name, args);
+export const copyText = (text) => invoke('copy_text', { text: String(text) });
+export const tool = (action, label, glyph, attrs = '') =>
+  `<button type="button" class="icon-btn" data-do="${esc(action)}" title="${esc(tr(label))}" aria-label="${esc(tr(label))}" ${attrs}>${icon(glyph)}</button>`;
+export const options = (pairs, value, translate = true) =>
+  pairs
+    .map(
+      ([v, text]) =>
+        `<option value="${esc(v)}" ${String(v) === String(value) ? 'selected' : ''}>${esc(translate ? tr(text) : text)}</option>`,
+    )
+    .join('');
+export const foot = (html) => `<div class="dialog-foot">${btn('close', 'Cancel')}${html}</div>`;
 export const btn = (action, label, glyph, style = '') =>
-  `<button type="button" data-do="${esc(action)}" class="${style}">${glyph ? icon(glyph) : ''}${esc(label)}</button>`;
+  `<button type="button" data-do="${esc(action)}" class="${style}">${glyph ? icon(glyph) : ''}${esc(tr(label))}</button>`;
 export const empty = (glyph, title, detail) =>
-  `<div class="empty"><span class="emblem">${icon(glyph)}</span><strong>${esc(title)}</strong><p>${esc(detail)}</p></div>`;
+  `<div class="empty"><span class="emblem">${icon(glyph)}</span><strong>${esc(tr(title))}</strong><p>${esc(tr(detail))}</p></div>`;
 export const pill = (text, up = false) =>
-  `<span class="pill ${up ? 'good' : ''}"><i></i>${esc(text)}</span>`;
+  `<span class="pill ${up ? 'good' : ''}"><i></i>${esc(tr(text))}</span>`;
 export const typeName = (t) =>
   ({ wifi: 'Wi-Fi', ethernet: 'Ethernet', virtual: 'Virtual', loopback: 'Loopback' })[t] || 'Network';
 export const profileMark = () => `<span class="emblem">${icon('layers')}</span>`;
@@ -56,7 +80,7 @@ export function notify(message) {
 }
 export function modal(title, body) {
   const d = $('dialog');
-  d.innerHTML = `<div class="dialog-head"><h2 id="dialog-title">${esc(title)}</h2><button class="icon-btn" aria-label="Close" data-do="close">${icon('close')}</button></div>${body}<p id="dialog-error" role="alert" hidden></p>`;
-  if (!d.open) d.showModal();
+  d.innerHTML = `<div class="dialog-head"><h2 id="dialog-title">${esc(tr(title))}</h2><button class="icon-btn" aria-label="${esc(tr('Close'))}" data-do="close">${icon('close')}</button></div>${body}<p id="dialog-error" role="alert" hidden></p>`;
+  if (!d.open) window.__NM_UTILITY__ ? d.show() : d.showModal();
   return d;
 }

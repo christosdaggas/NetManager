@@ -17,18 +17,16 @@ Made for Fedora with the GNOME desktop (tested on Fedora 44).
 
 ## Tauri desktop workspace (this branch)
 
-The Linux desktop UI opens on a live traffic graph with download and upload
-rates. Use the pause control to inspect a reading. The connection inspector
-shows the active interface, IPv4 address, gateway, resolver, and link speed.
-Use the left sidebar to open **Profiles** and
-create a DHCP or static IPv4 configuration, set DNS, edit a profile, or review
-its actions before applying. **Interfaces** shows link state and hardware
-details; **Activity log** searches the most recent 500 entries.
+The Tauri window follows the GTK4 application: **Dashboard**, **Profiles**,
+**Scanner**, **Port Scanner**, **Logs**, **Settings**, and **Help**. The
+dashboard puts Quick Actions above Active Profile, Service Status, Current
+Network and Network Activity. The menu in the header contains the theme
+chooser, Preferences, About, and Quit.
 
 ### Run it on Fedora
 
 ```bash
-sudo dnf install cargo gcc gcc-c++ pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel librsvg2-devel
+sudo dnf install cargo gcc gcc-c++ python3 gettext pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel glib2-devel gettext-devel openssl-devel librsvg2-devel
 cargo run --locked --manifest-path src-tauri/Cargo.toml
 ```
 
@@ -37,22 +35,25 @@ address information; profile activation uses NetworkManager's `nmcli` and the
 same Linux helpers as the GTK edition. To build an optimized executable, add
 `--release` to `cargo build --locked --manifest-path src-tauri/Cargo.toml`.
 
-The two editions share the profile library, encryption format, and activity log
-under `~/.local/share/daggas/network-manager/`. Profile activation uses the
-same Rust executor. The Tauri editor preserves settings outside its IPv4/DNS
-form. **Classic tools** opens the separately installed or locally built GTK
-app for advanced editing, encryption setup, scanners, and background services
-(tray, watchdog, scheduler, and automatic switching). These services run only
-in the GTK edition. Finish editing in one window before editing in the other;
-use **Refresh** after returning to the workspace.
+Profile editors, the switcher, preferences, diagnostics, device details, and
+scheduling/shortcut managers open in separate movable Tauri windows. The two
+scan pages keep their work and results when navigating between pages.
 
-The sidebar fills the window height. Use its bottom-left button or **Ctrl+B**
+The Tauri executable runs independently and reuses the GTK edition's Rust
+profile executor, storage, encryption, discovery workers, scheduler, watchdog,
+auto-switch engine, and StatusNotifierItem tray. Both editions use the same
+profile library, settings, and log under `~/.local/share/daggas/network-manager/`.
+Run one edition at a time when automatic switching or scheduling is enabled.
+Global profile shortcuts use the desktop's GlobalShortcuts portal when
+available; configured shortcuts also work in the focused window.
+
+The sidebar fills the window height. Use its header button or **Ctrl+B**
 to switch between labels and an [icon rail](docs/workspace-compact.webp). The workspace remembers that choice,
 window placement, last page, theme, and sampling
-interval. Traffic history is session-only and sampling stops when Overview is
-not visible. Press **Ctrl+K** for commands, **Ctrl+1–5** to navigate, **Ctrl+N**
-to create a profile, **Ctrl+F** to filter profiles or activity, and **F5** to
-refresh. **Preferences** offers system, light, and dark appearances.
+interval. Traffic history is session-only. Press **Ctrl+1–7** to navigate,
+**Ctrl+N** to create a profile, **Ctrl+P** to switch, **Ctrl+D** for diagnostics,
+**Ctrl+Shift+C** to copy network information, **F5** to refresh, or **F1** for
+Help. **Ctrl+?** lists the shortcuts. Profiles and logs support **Ctrl+F**.
 
 ### Verification
 

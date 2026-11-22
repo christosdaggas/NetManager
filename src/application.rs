@@ -493,7 +493,7 @@ impl Application {
             return true;
         }
 
-        if let Some((handle, receiver)) = start_tray() {
+        if let Some((handle, receiver)) = start_tray(tokio_runtime()) {
             // Store the handle
             *self.imp().tray_handle.borrow_mut() = Some(handle);
             self.refresh_tray();

@@ -5,6 +5,8 @@ use std::{fs, process::Command};
 
 #[derive(Serialize)]
 pub struct Snapshot {
+    service: bool,
+    connection: Option<String>,
     host: String,
     adapters: Vec<AdapterInfo>,
     primary: Option<String>,
@@ -43,9 +45,14 @@ pub async fn network_snapshot() -> Snapshot {
             .get("addr_info")?
             .as_array()?
             .iter()
-            .find(|a| a["scope"] == "global")?["local"]
-            .as_str()
-            .map(String::from)
+            .find(|a| a["scope"] == "global")
+            .and_then(|a| {
+                Some(format!(
+                    "{}/{}",
+                    a["local"].as_str()?,
+                    a["prefixlen"].as_u64()?
+                ))
+            })
     });
     let dns = fs::read_to_string("/etc/resolv.conf")
         .unwrap_or_default()
@@ -58,6 +65,20 @@ pub async fn network_snapshot() -> Snapshot {
         })
         .collect();
     Snapshot {
+        service: Command::new("systemctl")
+            .args(["is-active", "--quiet", "NetworkManager.service"])
+            .status()
+            .is_ok_and(|s| s.success()),
+        connection: primary
+            .as_ref()
+            .and_then(|d| {
+                Command::new("nmcli")
+                    .args(["-g", "GENERAL.CONNECTION", "device", "show", d])
+                    .output()
+                    .ok()
+            })
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()),
         host: fs::read_to_string("/proc/sys/kernel/hostname")
             .unwrap_or_default()
             .trim()

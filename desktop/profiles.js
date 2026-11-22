@@ -1,130 +1,310 @@
-import { $, icon, esc, btn, empty, profileMark, modal, notify } from './ui.js';
+import { $, btn, esc, icon, tool, modal, empty, pill, options, foot, invoke } from './ui.js';
 
-export function libraryList(library, query = '', compact = false) {
-  if (library.locked)
-    return `${empty('lock', 'Profile library locked', 'Unlock your encrypted profiles for this session.')}<div class="empty-action">${btn('unlock', 'Unlock library', 'lock')}</div>`;
-  const profiles = library.profiles.filter((p) =>
-    `${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase()),
-  );
-  if (!profiles.length)
-    return empty(
-      'layers',
-      query ? 'No matching profiles' : 'No saved profiles yet',
-      query ? 'Try another name or description.' : 'Save a configuration for home, work, or travel.',
+import { tr } from './i18n.js';
+const templates = [
+  'Blank (Empty)',
+  'Home Network',
+  'Office Network',
+  'Public WiFi',
+  'VPN Only',
+  'Development',
+];
+const arr = (p, k) => p[k] || [];
+const field = (key, label, value = '', placeholder = '') =>
+  `<label for="${key}">${esc(tr(label))}</label><input id="${key}" value="${esc(value)}" placeholder="${esc(placeholder)}">`;
+const select = (key, label, pairs, value) =>
+  `<label for="${key}">${esc(tr(label))}</label><select id="${key}">${options(pairs, value)}</select>`;
+const section = (title, html, open = false) =>
+  `<details class="editor-section" ${open ? 'open' : ''}><summary>${esc(title)}</summary><div>${html}</div></details>`;
+export const latest = (list) =>
+  list.filter((p) => p.applied_at).sort((a, b) => Date.parse(b.applied_at) - Date.parse(a.applied_at))[0];
+export function profileList(lib, query = '') {
+  if (lib.locked)
+    return (
+      empty('lock', 'Profiles are locked', 'Enter your passphrase to view this library.') +
+      btn('unlock', 'Unlock Profiles', 'lock', 'primary')
     );
-  const latest = library.profiles
-    .filter((p) => p.applied_at)
-    .sort((a, b) => Date.parse(b.applied_at) - Date.parse(a.applied_at))[0];
-  const visible = compact
-    ? [...profiles].sort((a, b) => Number(b === latest) - Number(a === latest)).slice(0, 3)
-    : profiles;
-  return `<ul class="profile-list">${visible.map((p) => `<li><button data-profile="${esc(p.id)}">${profileMark()}<span class="profile-text"><strong>${esc(p.name)}</strong><small>${esc(p.description || `${p.actions.length} configured action${p.actions.length === 1 ? '' : 's'}`)}</small></span>${p === latest ? '<span class="latest">Last applied</span>' : ''}${icon('chevron')}</button></li>`).join('')}</ul>`;
+  const list = lib.profiles.filter((p) =>
+    [p.name, p.group, p.description].some((v) => v?.toLowerCase().includes(query.toLowerCase())),
+  );
+  if (!list.length)
+    return (
+      empty(
+        'users',
+        query ? 'No Matching Profiles' : 'No Profiles Yet',
+        query ? 'Try another name or group.' : 'Create your first network profile to get started',
+      ) +
+      (!query ? `<div class="empty-action">${btn('new', 'Create Profile', 'plus', 'primary')}</div>` : '')
+    );
+  const active = latest(lib.profiles);
+  return `<ul class="profile-rows">${list
+    .map(
+      (
+        p,
+      ) => `<li data-id="${esc(p.id)}"><button class="row-name" data-do="apply"><span>${esc(p.name)}</span><small>${esc(p.group || p.description || '')}</small></button>${pill(active === p ? 'Active' : 'Inactive', active === p)}
+    ${tool('apply', 'Apply Profile', 'play', active === p ? 'disabled' : '')}${tool('edit', 'Edit Profile', 'edit')}${tool('duplicate', 'Duplicate Profile', 'copy')}${tool('remove', 'Delete Profile', 'trash')}</li>`,
+    )
+    .join('')}</ul>`;
 }
 
-export function detail(p) {
-  modal(
-    p.name,
-    `<p>${esc(p.description || 'Saved network configuration.')}</p><div class="facts">
-    <div><small>Last applied</small><strong>${p.applied_at ? esc(new Date(p.applied_at).toLocaleString()) : 'Never'}</strong></div>
-    <div><small>Configuration</small><strong>${p.actions.length} actions</strong></div></div>
-    <h3>Profile actions</h3>${p.actions.length ? `<ol class="action-list">${p.actions.map((a) => `<li>${esc(a)}</li>`).join('')}</ol>` : '<p>This profile records a location without changing network settings.</p>'}
-    <div class="dialog-foot">${btn('remove', 'Delete', null, 'danger')}${btn('edit', 'Edit profile')}${btn('apply', 'Apply profile', 'arrow', 'primary')}</div>`,
+let model, existing, dirty, devices;
+function adapterRows(net) {
+  const ns = arr(model, 'network_actions');
+  devices = [
+    ...(ns.some((a) => !a.interface && ['ipv4_config', 'dns_servers', 'wifi_connect'].includes(a.action))
+      ? [null]
+      : []),
+    ...new Set([...net.adapters.map((a) => a.name), ...ns.map((a) => a.interface).filter(Boolean)]),
+  ];
+  return (
+    devices
+      .map((dev, i) => {
+        const a = ns.filter((a) => (a.interface ?? null) === dev),
+          ip = a.find((a) => a.action === 'ipv4_config'),
+          dns = a.find((a) => a.action === 'dns_servers'),
+          enabled = a.find((a) => a.action === 'interface_enable'),
+          wifi = a.find((a) => a.action === 'wifi_connect');
+        const prefix = `adapter-${i}`,
+          state = enabled ? (enabled.enabled ? 'on' : 'off') : a.length ? 'on' : 'keep';
+        return section(
+          dev ?? 'Default interface',
+          `<div data-change="${prefix}">${select(
+            prefix + '-state',
+            'Adapter state',
+            [
+              ['keep', 'Leave unchanged'],
+              ['on', 'Enable Adapter'],
+              ...(dev ? [['off', 'Disable Adapter']] : []),
+            ],
+            state,
+          )}
+      <div class="adapter-fields">${select(
+        prefix + '-ip',
+        'IPv4 Configuration',
+        [
+          ['auto', 'DHCP (Automatic)'],
+          ['manual', 'Static (Manual)'],
+          ['disabled', 'Disabled'],
+          ['linklocal', 'Link-local only'],
+        ],
+        ip?.method || 'auto',
+      )}
+      <div class="static-fields">${field(prefix + '-address', 'IP Address', ip?.addresses?.[0]?.address)}${field(prefix + '-prefix', 'Subnet Mask or Prefix', ip?.addresses?.[0]?.prefix ?? 24)}${field(prefix + '-gateway', 'Gateway', ip?.gateway)}</div>
+      ${select(
+        prefix + '-dns',
+        'DNS Configuration',
+        [
+          ['auto', 'Automatic (from DHCP)'],
+          ['manual', 'Manual'],
+        ],
+        dns?.servers?.length ? 'manual' : 'auto',
+      )}
+      <div class="dns-fields">${field(prefix + '-dns1', 'Primary DNS', dns?.servers?.[0])}${field(prefix + '-dns2', 'Secondary DNS', dns?.servers?.slice(1).join(', '))}</div>
+      ${net.adapters.find((a) => a.name === dev)?.adapter_type === 'wifi' || wifi ? field(prefix + '-ssid', 'WiFi Network (SSID)', wifi?.ssid) : ''}</div></div>`,
+        );
+      })
+      .join('') || '<p>No network adapters detected.</p>'
   );
 }
-
-export function editor(p, adapters, primary) {
-  const c = p
-    ? p.connection
-    : {
-        interface: primary || adapters[0]?.name || '',
-        method: 'unchanged',
-        address: '',
-        gateway: '',
-        dns: '',
-      };
-  const options = [...new Set([c?.interface, ...adapters.map((a) => a.name)].filter(Boolean))];
+function syncFields() {
+  devices.forEach((_, i) => {
+    const k = `adapter-${i}`,
+      g = document.querySelector(`[data-change="${k}"]`);
+    g.querySelector('.adapter-fields').hidden = $(k + '-state').value !== 'on';
+    g.querySelector('.static-fields').hidden = $(k + '-ip').value !== 'manual';
+    g.querySelector('.dns-fields').hidden = $(k + '-dns').value !== 'manual';
+  });
+  $('proxy-manual').hidden = $('proxy-mode').value !== 'manual';
+  $('proxy-auto').hidden = $('proxy-mode').value !== 'auto';
+  for (const k of ['vpn', 'pre_script', 'post_script', 'run_program'])
+    $(k + '-fields').hidden = !$(k + '-enabled').checked;
+}
+function populate(net, template) {
+  const m = model.metadata,
+    vpn = arr(model, 'network_actions').find((a) => a.action === 'vpn_connect');
+  const proxy = arr(model, 'system_actions').find((a) => a.action === 'proxy_config') || {};
+  const automation = arr(model, 'automation_actions');
   modal(
-    p ? 'Edit profile' : 'Create a profile',
-    `<p>Keep the connection settings for a place together.</p><form id="editor">
-    <label for="p-name">Profile name</label><input id="p-name" name="name" maxlength="100" required autofocus placeholder="e.g. Studio network" value="${esc(p?.name)}">
-    <label for="p-description">Description <small>optional</small></label><input name="description" id="p-description" maxlength="500" value="${esc(p?.description)}" placeholder="What is this configuration for?">
+    existing ? 'Edit Profile' : 'Create Profile',
+    `<form id="profile-editor">
     ${
-      c
-        ? `<fieldset><legend>Network settings</legend><div class="form-grid"><div><label for="p-interface">Interface</label><select id="p-interface" name="interface"><option value="">Select interface</option>${options.map((x) => `<option ${x === c.interface ? 'selected' : ''} value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>
-    <div><label for="p-method">IPv4 assignment</label><select name="method" id="p-method">${[
-      ['unchanged', 'Leave unchanged'],
-      ['auto', 'Automatic (DHCP)'],
-      ['manual', 'Static address'],
-    ]
-      .map(([v, t]) => `<option value="${v}" ${c.method === v ? 'selected' : ''}>${t}</option>`)
-      .join('')}</select></div></div>
-    <div id="manual" class="form-grid"><div><label for="p-addr">IPv4 address / prefix</label><input name="address" id="p-addr" value="${esc(c.address)}" placeholder="192.168.1.20/24"></div>
-    <div><label for="p-gw">Gateway <small>optional</small></label><input name="gateway" id="p-gw" value="${esc(c.gateway)}" placeholder="192.168.1.1"></div></div>
-    <label for="p-dns">DNS servers <small>optional</small></label><input id="p-dns" name="dns" value="${esc(c.dns)}" placeholder="1.1.1.1, 9.9.9.9"></fieldset>`
-        : '<p class="info">This profile has advanced network actions. You can rename it here; use the classic editor to change those actions.</p>'
+      !existing
+        ? select(
+            'template',
+            'Start From Template',
+            templates.map((t, i) => [i, t]),
+            template,
+          )
+        : ''
     }
-    <div class="dialog-foot">${btn('close', 'Cancel')}<button class="primary" type="submit">Save profile</button></div></form>`,
+    <fieldset><legend>Profile Details</legend>${field('p-name', 'Name', m.name)}${field('p-description', 'Description', m.description)}${field('p-group', 'Group (optional)', m.group?.name)}</fieldset>
+    <h3>Network Adapters</h3>${adapterRows(net)}
+    ${section('VPN Connection', `<div data-change="vpn"><label><input id="vpn-enabled" type="checkbox" ${vpn ? 'checked' : ''}> ${esc(tr('Connect to VPN'))}</label><div id="vpn-fields">${field('vpn-name', 'VPN Connection Name', vpn?.connection_name)}</div></div>`)}
+    ${section(
+      'Proxy Settings',
+      `<div data-change="proxy">${select(
+        'proxy-mode',
+        'Proxy Mode',
+        [
+          ['keep', 'Leave unchanged'],
+          ['none', 'None'],
+          ['manual', 'Manual'],
+          ['auto', 'Automatic (PAC)'],
+        ],
+        proxy.mode || 'keep',
+      )}
+      <div id="proxy-manual">${['http', 'https', 'ftp', 'socks'].map((k) => field(k + '-proxy', k.toUpperCase() + ' Proxy', proxy[k + '_proxy'])).join('')}${field('no-proxy', 'No Proxy For', proxy.no_proxy?.join(', '))}</div><div id="proxy-auto">${field('pac', 'PAC URL', proxy.pac_url)}</div></div>`,
+    )}
+    ${section(
+      'Scripts and Programs',
+      ['pre_script', 'post_script', 'run_program']
+        .map((kind, i) => {
+          const a = automation.find((a) => a.action === kind);
+          return `<div data-change="${kind}"><label><input type="checkbox" id="${kind}-enabled" ${a ? 'checked' : ''}> ${esc(tr(['Run Pre-Script', 'Run Post-Script', 'Run Program'][i]))}</label><div id="${kind}-fields">${field(kind, ['Pre-Script Path', 'Post-Script Path', 'Program Path'][i], a?.path || a?.program)}${field(kind + '-args', i === 2 ? 'Program Arguments' : 'Arguments', a?.args?.join(' '))}</div></div>`;
+        })
+        .join(''),
+    )}
+    ${section('Auto-Switch Rules', `<div data-change="rules"><label for="rules">Rule set (JSON)</label><textarea id="rules" rows="5" placeholder='{"operator":"and","conditions":[{"type":"wifi_ssid","ssid":"Office"}]}'>${esc(model.auto_switch_rules ? JSON.stringify(model.auto_switch_rules, null, 2) : '')}</textarea></div>`)}
+    ${foot(`<button class="primary">${existing ? 'Save' : 'Create'}</button>`)}</form>`,
   );
-  if (c) {
-    const update = () => {
-      const manual = $('p-method').value === 'manual';
-      $('manual').hidden = !manual;
-      $('p-addr').required = manual;
-    };
-    $('p-method').addEventListener('change', update);
-    update();
+  $('p-name').required = true;
+  $('p-name').maxLength = 100;
+  $('p-name').focus();
+  syncFields();
+  $('profile-editor').addEventListener('input', (e) => {
+    const scope = e.target.closest('[data-change]');
+    if (scope) dirty.add(scope.dataset.change);
+  });
+  $('profile-editor').addEventListener('change', async (e) => {
+    const scope = e.target.closest('[data-change]');
+    if (scope) dirty.add(scope.dataset.change);
+    if (e.target.id === 'template') {
+      const t = Number(e.target.value),
+        name = $('p-name').value;
+      e.target.disabled = true;
+      try {
+        const next = await invoke('profile_form', { template: t });
+        if (!$('profile-editor')) return;
+        model = next;
+        if (name) model.metadata.name = name;
+        dirty = new Set();
+        populate(net, t);
+      } catch (err) {
+        $('dialog-error').hidden = false;
+        $('dialog-error').textContent = String(err);
+        e.target.disabled = false;
+      }
+    } else syncFields();
+  });
+}
+export async function editor(p, net) {
+  model = await invoke('profile_form', { id: p?.id, template: 0 });
+  existing = p;
+  dirty = new Set();
+  populate(net, 0);
+}
+function prefixLength(v) {
+  if (/^\d+$/.test(v) && +v <= 32) return +v;
+  const octets = v.split('.');
+  if (octets.length === 4 && octets.every((o) => /^\d+$/.test(o) && +o <= 255)) {
+    const bits = octets.map((o) => (+o).toString(2).padStart(8, '0')).join('');
+    if (/^1*0*$/.test(bits)) return bits.indexOf('0') < 0 ? 32 : bits.indexOf('0');
   }
+  throw Error('Enter a valid subnet mask or prefix (0–32).');
 }
-
-export function confirmAction(type, p) {
-  if (type === 'remove')
-    modal(
-      'Delete profile?',
-      `<p><strong>${esc(p.name)}</strong> will be removed from this computer. Current network settings will stay as they are.</p><div class="dialog-foot">${btn('close', 'Cancel')}${btn('confirm-remove', 'Delete profile', null, 'destructive')}</div>`,
+export async function saveEditor() {
+  const draft = structuredClone(model),
+    m = draft.metadata,
+    val = (k) => $(k)?.value.trim() || '';
+  m.name = val('p-name');
+  m.description = val('p-description') || null;
+  m.group = val('p-group') ? { ...m.group, name: val('p-group') } : null;
+  let ns = arr(draft, 'network_actions'),
+    sys = arr(draft, 'system_actions'),
+    aut = arr(draft, 'automation_actions');
+  devices.forEach((dev, i) => {
+    const k = `adapter-${i}`;
+    if (!dirty.has(k)) return;
+    const extra =
+      ns.find((a) => (a.interface ?? null) === dev && a.action === 'ipv4_config')?.addresses?.slice(1) ||
+      [];
+    ns = ns.filter(
+      (a) =>
+        (a.interface ?? null) !== dev ||
+        !['ipv4_config', 'dns_servers', 'interface_enable', 'wifi_connect'].includes(a.action),
     );
-  else
-    modal(
-      'Apply profile?',
-      `<p>Apply <strong>${esc(p.name)}</strong> to this computer.</p>${p.actions.length ? `<ol class="action-list">${p.actions.map((a) => `<li>${esc(a)}</li>`).join('')}</ol>` : '<p>No network settings will be changed.</p>'}
-    ${p.automation ? '<label class="check"><input id="allow-auto" type="checkbox">I reviewed these automation actions and want to run them.</label>' : ''}
-    <div class="dialog-foot">${btn('close', 'Cancel')}<button class="primary" data-do="confirm-apply" ${p.automation ? 'disabled' : ''}>Apply profile</button></div>`,
-    );
-  $('allow-auto')?.addEventListener(
-    'change',
-    (e) => (document.querySelector('[data-do="confirm-apply"]').disabled = !e.target.checked),
-  );
-}
-
-export function unlock() {
-  modal(
-    'Unlock your library',
-    `<p>Your passphrase stays in memory for this session.</p><form id="unlock-form">
-    <label for="passphrase">Passphrase</label><input id="passphrase" type="password" autocomplete="current-password" required autofocus>
-    <div class="dialog-foot">${btn('close', 'Cancel')}<button class="primary">Unlock profiles</button></div></form>`,
-  );
-}
-
-export async function submitProfile(e, p, invoke, done) {
-  if (e.target.id !== 'editor' && e.target.id !== 'unlock-form') return;
-  e.preventDefault();
-  const f = new FormData(e.target);
-  if (e.target.id === 'unlock-form') {
-    await invoke('unlock_profiles', { passphrase: $('passphrase').value });
-    notify('Profile library unlocked.');
-  } else {
-    const connection = f.has('method')
-      ? Object.fromEntries(['interface', 'method', 'address', 'gateway', 'dns'].map((k) => [k, f.get(k)]))
-      : null;
-    await invoke('save_profile', {
-      draft: {
-        id: p?.id,
-        revision: p?.revision,
-        name: f.get('name'),
-        description: f.get('description'),
-        connection,
-      },
+    const state = val(k + '-state');
+    if (state === 'keep') return;
+    if (dev) ns.push({ action: 'interface_enable', interface: dev, enabled: state === 'on' });
+    if (state === 'off') return;
+    const method = val(k + '-ip');
+    ns.push({
+      action: 'ipv4_config',
+      interface: dev,
+      method,
+      addresses:
+        method === 'manual'
+          ? [{ address: val(k + '-address'), prefix: prefixLength(val(k + '-prefix')) }, ...extra]
+          : [],
+      gateway: method === 'manual' ? val(k + '-gateway') || null : null,
     });
-    notify('Profile saved.');
+    const servers =
+      val(k + '-dns') === 'manual'
+        ? [val(k + '-dns1'), val(k + '-dns2')]
+            .join(',')
+            .split(/[,\s]+/)
+            .filter(Boolean)
+        : [];
+    if (val(k + '-dns') === 'manual' && !servers.length) throw Error('Enter a DNS server.');
+    ns.push({ action: 'dns_servers', interface: dev, servers });
+    if (val(k + '-ssid')) ns.push({ action: 'wifi_connect', interface: dev, ssid: val(k + '-ssid') });
+  });
+  if (dirty.has('vpn')) {
+    ns = ns.filter((a) => a.action !== 'vpn_connect');
+    if ($('vpn-enabled').checked) {
+      if (!val('vpn-name')) throw Error('Enter a VPN connection name.');
+      ns.push({ action: 'vpn_connect', connection_name: val('vpn-name') });
+    }
   }
-  await done();
+  if (dirty.has('proxy')) {
+    sys = sys.filter((a) => a.action !== 'proxy_config');
+    const mode = val('proxy-mode');
+    if (mode !== 'keep')
+      sys.push({
+        action: 'proxy_config',
+        mode,
+        pac_url: val('pac') || null,
+        no_proxy: val('no-proxy')
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean),
+        ...Object.fromEntries(
+          ['http', 'https', 'ftp', 'socks'].map((k) => [k + '_proxy', val(k + '-proxy') || null]),
+        ),
+      });
+  }
+  for (const kind of ['pre_script', 'post_script', 'run_program'])
+    if (dirty.has(kind)) {
+      const index = aut.findIndex((a) => a.action === kind),
+        prior = aut[index] || { action: kind };
+      if (index >= 0) aut.splice(index, 1);
+      if ($(kind + '-enabled').checked) {
+        if (!val(kind)) throw Error('Enter a script or program path.');
+        const original = prior.args || [];
+        const args =
+          val(kind + '-args') === original.join(' ')
+            ? original
+            : val(kind + '-args')
+                .split(/\s+/)
+                .filter(Boolean);
+        aut.splice(index < 0 ? aut.length : index, 0, {
+          ...prior,
+          [kind === 'run_program' ? 'program' : 'path']: val(kind),
+          args,
+        });
+      }
+    }
+  Object.assign(draft, { network_actions: ns, system_actions: sys, automation_actions: aut });
+  if (dirty.has('rules')) draft.auto_switch_rules = val('rules') ? JSON.parse(val('rules')) : null;
+  await invoke('save_profile', { id: existing?.id, revision: existing?.revision, draft });
 }

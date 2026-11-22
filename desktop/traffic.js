@@ -17,7 +17,7 @@ export function chartCard() {
     glyph,
   ) => `<div class="metric ${key}"><small>${icon(glyph)}${caption}</small>
     <div class="reading"><b id="${key}">—</b><span id="${key}-unit"></span></div></div>`;
-  return `<section class="card traffic"><div class="card-head"><h2>Network traffic</h2>
+  return `<section class="card traffic"><div class="card-head"><h2>${icon('pulse')} Network Activity</h2>
     <div class="sampling"><small id="sample-state">Collecting samples</small><button type="button" class="tool" id="pause-traffic" data-do="pause-traffic" aria-label="Pause traffic sampling" title="Pause traffic sampling" disabled>${icon('pause')}</button></div></div>
     <div class="rates">${metric('rx', 'Download', 'down')}${metric('tx', 'Upload', 'up')}</div>
     <div class="graph"><div class="y-axis" aria-hidden="true"><span id="scale-high">—</span><span id="scale-mid">—</span><span>0</span></div>
@@ -66,7 +66,13 @@ export function sample(invoke, device, interval) {
     try {
       const counters = device && (await invoke('traffic_counters'));
       if (generation !== epoch) return;
-      const c = counters && counters.find((c) => c.interface === device);
+      const c =
+        counters &&
+        (device === '*'
+          ? counters
+              .filter((c) => c.interface !== 'lo')
+              .reduce((sum, c) => ({ rx: sum.rx + c.rx, tx: sum.tx + c.tx }), { rx: 0, tx: 0 })
+          : counters.find((c) => c.interface === device));
       const now = performance.now();
       if (c && last && c.rx >= last.rx && c.tx >= last.tx) {
         const dt = (now - last.t) / 1000;

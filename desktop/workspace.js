@@ -1,388 +1,708 @@
-import { $, icon, esc, btn, empty, pill, typeName, notify, modal } from './ui.js';
+import {
+  copyText,
+  $,
+  btn,
+  esc,
+  icon,
+  tool,
+  modal,
+  options,
+  foot,
+  invoke,
+  notify,
+  empty,
+  pill,
+  typeName,
+} from './ui.js';
 import { chartCard, sample, stop, togglePause } from './traffic.js';
-import { libraryList, detail, editor, confirmAction, unlock, submitProfile } from './profiles.js';
+import { profileList, latest, editor, saveEditor } from './profiles.js';
+import {
+  scannerPage,
+  mountScanner,
+  scannerDefaults,
+  scanAction,
+  scannerInput,
+  deviceDetails,
+  inspectDevice,
+} from './scanners.js';
+import {
+  settingsPage,
+  preferences,
+  about,
+  rules,
+  manager,
+  addEntry,
+  changeEntry,
+  saveEntry,
+  encryptionDialog,
+  saveEncryption,
+  updateSetting,
+} from './settings.js';
+import { helpPage, shortcuts } from './help.js';
+import { tr, loadCatalog, localize } from './i18n.js';
 
 const pages = {
-  overview: ['Overview', 'grid', 'Overview', ''],
-  profiles: [
-    'Profiles',
-    'layers',
-    'Network profiles',
-    'Save and switch between configurations for different places.',
-  ],
-  interfaces: [
-    'Interfaces',
-    'port',
-    'Network interfaces',
-    'Inspect the physical network adapters on this computer.',
-  ],
-  activity: [
-    'Activity log',
-    'log',
-    'Activity log',
-    'Review recent profile changes and application events.',
-  ],
-  settings: [
-    'Preferences',
-    'settings',
-    'Workspace preferences',
-    'Adjust the appearance and sampling interval of your workspace.',
-  ],
+  dashboard: ['Dashboard', 'grid', 'Network Manager', 'Manage your system connectivity'],
+  profiles: ['Profiles', 'users', '', ''],
+  scanner: ['Scanner', 'search', 'Network Scanner', 'Discover devices on your local network'],
+  ports: ['Port Scanner', 'monitor', 'Port Scanner', 'Find the open TCP ports of a device'],
+  logs: ['Logs', 'log', 'Application Logs', ''],
+  settings: ['Settings', 'settingsTools', '', ''],
+  help: ['Help', 'info', 'Help', 'Learn how to use Network Manager'],
 };
-const invoke = (name, args = {}) =>
-  window.__TAURI__?.core?.invoke(name, args) ??
-  Promise.reject('Open the Tauri desktop app to connect to local network data.');
-let page = pages[localStorage.page] ? localStorage.page : 'overview';
-let library = { profiles: [], locked: false, logs: [] },
-  net = { adapters: [], dns: [] };
-let current = null,
-  busy = false,
-  loading = true,
+let page = Object.hasOwn(pages, localStorage.page) ? localStorage.page : 'dashboard';
+let lib = { profiles: [], logs: [], locked: false },
+  net = { adapters: [], dns: [] },
   query = '',
-  level = 'ALL';
+  level = 'ALL',
+  selected,
+  automatic = false,
+  busy = false,
+  managerKind,
+  importData;
 let interval = [1000, 2000, 5000].includes(+localStorage.interval) ? +localStorage.interval : 2000;
-const scheme = window.matchMedia('(prefers-color-scheme: dark)');
-function theme() {
-  const pref = localStorage.theme || 'system';
-  document.documentElement.dataset.theme = pref === 'system' ? (scheme.matches ? 'dark' : 'light') : pref;
+const menu = $('menu'),
+  dialog = $('dialog'),
+  scheme = matchMedia('(prefers-color-scheme: dark)'),
+  narrow = matchMedia('(max-width:800px)');
+const utility = window.__NM_UTILITY__;
+const closeUtility = () => window.__TAURI__.window.getCurrentWindow().close();
+const changed = (profilesPage = false) =>
+  utility ? invoke('workspace_changed', { profilesPage }) : Promise.resolve();
+const openWindow = (kind, data = null) => invoke('open_utility', { kind, data });
+function applyTheme() {
+  const t = lib.settings?.theme || localStorage.theme || 'system';
+  document.documentElement.dataset.theme = t === 'system' ? (scheme.matches ? 'dark' : 'light') : t;
 }
-theme();
-scheme.addEventListener('change', theme);
-const mainAdapter = () => net.adapters.find((a) => a.name === net.primary);
-const host = () => net.host || 'This computer';
-let updatedAt;
-const narrowWindow = matchMedia('(max-width: 860px)');
-function syncSidebar() {
-  const compact = localStorage.sidebar ? localStorage.sidebar === 'compact' : narrowWindow.matches;
+function sidebar() {
+  const compact = localStorage.sidebar ? localStorage.sidebar === 'compact' : narrow.matches;
   document.documentElement.dataset.sidebar = compact ? 'compact' : 'expanded';
-  const toggle = $('sidebar-toggle');
-  const label = compact ? 'Expand sidebar' : 'Collapse sidebar';
-  toggle.setAttribute('aria-expanded', String(!compact));
-  toggle.setAttribute('aria-label', label);
-  toggle.title = `${label} (Ctrl B)`;
-  toggle.firstElementChild.innerHTML = icon(compact ? 'expand' : 'collapse');
-  toggle.lastElementChild.textContent = label;
+  const b = $('sidebar-toggle'),
+    label = compact ? 'Expand sidebar' : 'Collapse sidebar';
+  b.setAttribute('aria-expanded', String(!compact));
+  b.setAttribute('aria-label', label);
+  b.title = label + ' (Ctrl B)';
+  b.innerHTML = icon(compact ? 'expand' : 'collapse');
 }
-narrowWindow.addEventListener('change', syncSidebar);
-function drawNav() {
-  $('nav').innerHTML = Object.entries(pages)
-    .map(
-      ([key, [name, glyph]]) =>
-        `<button data-page="${key}" title="${name}" aria-label="${name}" ${key === page ? 'aria-current="page"' : ''}>${icon(glyph)}<span class="side-label">${name}</span></button>`,
-    )
-    .join('');
-}
-function interfaces() {
-  return `<section class="card"><div class="card-head"><div class="section-title">${icon('port')}<h2>Adapter inventory</h2></div><span class="tag">${net.adapters.length} TOTAL</span></div>
-  ${!net.adapters.length ? empty('port', 'No physical adapters detected', 'Refresh after connecting a network adapter.') : `<div class="table-wrap" role="region" tabindex="0" aria-label="Adapter inventory"><table><thead><tr>${['Interface', 'Type', 'Link state', 'Link speed', 'MAC address'].map((c) => `<th scope="col">${c}</th>`).join('')}</tr></thead><tbody>${net.adapters.map((a) => `<tr><th scope="row">${esc(a.name)}</th><td>${typeName(a.adapter_type)}</td><td>${pill(a.is_connected ? 'Up' : 'Down', a.is_connected)}</td><td>${a.speed_mbps ? `${a.speed_mbps} Mb/s` : '—'}</td><td class="mono">${esc(a.mac_address || '—')}</td></tr>`).join('')}</tbody></table></div>`}</section>`;
-}
-function overview() {
-  const a = mainAdapter();
-  const connected = !!net.gateway || !!a?.is_connected;
-  const title = loading
-    ? 'Reading connection…'
-    : a
-      ? typeName(a.adapter_type)
-      : net.primary
-        ? 'Network link'
-        : 'Disconnected';
-  const facts = [
-    ['IPv4 address', net.address],
-    ['Gateway', net.gateway],
-    ['DNS resolver', net.dns.join(' · ')],
-    ['Link speed', a?.speed_mbps ? `${a.speed_mbps.toLocaleString()} Mb/s` : null],
-  ];
-  return `<div class="dashboard">
-    ${chartCard()}
-    <section class="card connection"><div class="card-head"><h2>Connection</h2>${pill(loading ? 'Reading' : connected ? 'Link up' : 'Link down', connected)}</div>
-      <div class="link-identity"><span class="device-icon">${icon(a?.adapter_type === 'wifi' ? 'wifi' : 'port')}</span><div><strong id="link-type">${title}</strong><small id="link-device">${esc(net.primary || 'No active interface')}</small></div></div>
-      <dl class="link-facts">${facts.map(([t, v]) => `<div><dt>${t}</dt><dd>${esc(v || '—')}</dd></div>`).join('')}</dl>
-    </section>
-    <section class="card saved"><div class="card-head"><h2>Saved profiles <span class="count">${library.locked ? icon('lock') : library.profiles.length}</span></h2><button class="jump" data-page="profiles">All profiles ${icon('arrow')}</button></div>
-      ${libraryList(library, '', true)}</section>
-    <section class="card adapters"><div class="card-head"><h2>Interfaces <span class="count">${net.adapters.length}</span></h2><button class="jump" data-page="interfaces">Inspect ${icon('arrow')}</button></div>
-    ${
-      net.adapters.length
-        ? `<ul class="adapter-list">${[...net.adapters]
-            .sort((x, y) => Number(y.is_connected) - Number(x.is_connected))
-            .slice(0, 3)
-            .map(
-              (a) =>
-                `<li><span class="adapter-icon">${icon(a.adapter_type === 'wifi' ? 'wifi' : 'port')}</span><div><strong>${esc(a.name)}</strong><small>${typeName(a.adapter_type)}</small></div>${pill(a.is_connected ? 'Up' : 'Down', a.is_connected)}</li>`,
-            )
-            .join('')}</ul>`
-        : empty(
-            'port',
-            loading ? 'Reading adapters…' : 'No physical adapters detected',
-            'Connect an adapter, then refresh.',
-          )
-    }</section></div>`;
-}
-function logs() {
-  const logs = library.logs.filter(
-    (l) =>
-      (level === 'ALL' || l.level === level) &&
-      `${l.message} ${l.timestamp}`.toLowerCase().includes(query.toLowerCase()),
-  );
-  return logs.length
-    ? `<ol class="logs">${logs.map((l) => `<li><time>${esc(l.timestamp)}</time><span class="tag">${esc(l.level)}</span><span>${esc(l.message)}</span></li>`).join('')}</ol>`
-    : empty('log', 'No matching events', 'Profile operations and classic application events appear here.');
-}
-function preferences() {
-  return `<section class="card prefs"><div class="card-head"><div class="section-title">${icon('settings')}<h2>Presentation</h2></div></div>
-    <div><label for="theme">Color scheme<small>Follow your desktop or choose a fixed appearance.</small></label><select id="theme">${['system', 'light', 'dark'].map((t) => `<option ${t === (localStorage.theme || 'system') ? 'selected' : ''} value="${t}">${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}</select></div>
-    <div><label for="interval">Traffic sampling<small>Read local interface counters while Overview is visible.</small></label><select id="interval">${[1000, 2000, 5000].map((v) => `<option value="${v}" ${interval === v ? 'selected' : ''}>Every ${v / 1000} second${v === 1000 ? '' : 's'}</option>`).join('')}</select></div></section>
-    <section class="card prefs"><div class="card-head"><div class="section-title">${icon('book')}<h2>Classic tools</h2></div></div><div><div><strong>Advanced configuration</strong><small>Manage automatic switching, schedules, watchdog, scanners, and encryption settings in the GTK app.</small></div>${btn('classic', 'Open classic app', 'ext')}</div></section>`;
+function drawMenu() {
+  const theme = lib.settings?.theme || 'system';
+  menu.innerHTML = `<div class="swatches">${['system', 'light', 'dark'].map((v) => `<button data-do="theme-${v}" data-theme-choice="${v}" aria-pressed="${theme === v}" aria-label="${v} theme" title="${v} theme">${theme === v ? icon('check') : ''}</button>`).join('')}</div>
+    ${[
+      ['preferences', 'Preferences', 'settings'],
+      ['about', 'About', 'help'],
+      ['quit', 'Quit', 'close'],
+    ]
+      .map(([a, t, g]) => btn(a, t, g))
+      .join('')}`;
 }
 function render() {
-  stop();
-  drawNav();
-  const [, , title, sub] = pages[page];
-  $('page-title').textContent = title;
-  if (page === 'overview') {
-    $('subtitle').innerHTML =
-      `${icon('monitor')}<span id="host">${esc(host())}</span><span class="meta-divider" aria-hidden="true"></span><span>${updatedAt ? `Updated ${esc(updatedAt)}` : 'Reading network details…'}</span>`;
-  } else $('subtitle').textContent = sub;
-  document.title = `${title} · Network Manager`;
-  $('toolbar').innerHTML =
-    page === 'settings'
-      ? ''
-      : btn('refresh', 'Refresh', 'refresh') +
-        (['overview', 'profiles'].includes(page)
-          ? btn(
-              library.locked ? 'unlock' : 'new',
-              library.locked ? 'Unlock profiles' : 'New profile',
-              library.locked ? 'lock' : 'plus',
-              'primary',
-            )
-          : '');
-  if (page === 'overview') $('view').innerHTML = overview();
-  if (page === 'interfaces') $('view').innerHTML = interfaces();
-  if (page === 'settings') $('view').innerHTML = preferences();
-  if (page === 'profiles' || page === 'activity') {
-    const isProfile = page === 'profiles';
-    $('view').innerHTML =
-      `<section class="card"><div class="card-head"><div class="section-title">${icon(isProfile ? 'layers' : 'clock')}<h2>${isProfile ? 'Saved configurations' : 'Recorded events'}</h2></div><span class="tag">${isProfile ? library.profiles.length : library.logs.length} ${isProfile ? 'PROFILES' : 'RECENT'}</span></div>
-      <div class="filters"><label class="search">${icon('search')}<span class="sr">Search ${isProfile ? 'profiles' : 'events'}</span><input type="search" id="query" value="${esc(query)}" placeholder="Search ${isProfile ? 'profiles' : 'events'}…"></label>
-      ${isProfile ? '' : `<label>Level <select id="level">${['ALL', ...new Set(library.logs.map((l) => l.level))].map((l) => `<option ${level === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`}</div><div id="results"></div></section>`;
-    filter();
+  if (utility) {
+    applyTheme();
+    return;
   }
-  if (page === 'overview' && !loading) sample(invoke, net.primary, interval);
+  stop();
+  const [label, , title, sub] = pages[page];
+  applyTheme();
+  drawMenu();
+  $('nav').innerHTML = Object.entries(pages)
+    .map(
+      ([key, [n, g]]) =>
+        `<button data-page="${key}" title="${esc(tr(n))}" aria-label="${esc(tr(n))}" ${key === page ? 'aria-current="page"' : ''}>${icon(g)}<span class="side-label">${esc(tr(n))}</span></button>`,
+    )
+    .join('');
+  document.body.dataset.page = page;
+  document.title = `${tr(label)} · ${tr('Network Manager')}`;
+  $('heading').textContent = page === 'dashboard' ? '' : tr(label);
+  $('version').textContent = tr('Version {version}').replace('{version}', lib.version || '1.0.0');
+  $('page-title').textContent = tr(title || label);
+  $('subtitle').textContent = tr(sub);
+  $('toolbar').innerHTML = ['scanner', 'ports'].includes(page)
+    ? tool('scan-export', 'Export Results', 'up')
+    : '';
+  if (page === 'dashboard') {
+    const active = latest(lib.profiles),
+      a = net.adapters.find((a) => a.name === net.primary);
+    const facts = [
+      ['IP Address', net.address],
+      ['Gateway', net.gateway],
+      ['DNS Servers', net.dns.join(', ')],
+      [
+        'Connection',
+        net.primary
+          ? `${a ? typeName(a.adapter_type) : 'Network'} (${net.connection || net.primary})`
+          : 'Disconnected',
+      ],
+    ];
+    $('view').innerHTML =
+      `<section class="quick"><div><h2>${icon('settings')} Quick Actions</h2><p>Refresh status or switch to another profile</p></div><div class="actions">${btn('refresh', 'Refresh', null, 'primary')}${btn('switch', 'Switch Profile')}${btn('new', 'New Profile')}</div></section>
+    <div class="dash-pair"><section><h2>${icon('users')} Active Profile</h2><div class="status-value"><strong>${esc(lib.locked ? 'Profiles locked' : active?.name || 'No profile active')}</strong>${pill(active ? 'Active' : 'Inactive', !!active)}</div><p>${active ? 'Applied: ' + esc(new Date(active.applied_at).toLocaleString()) : 'Never applied'}</p></section>
+    <section><h2>${icon('settings')} Service Status</h2><div class="service-state">${icon(net.service ? 'check' : 'server')}<div><strong>${net.service == null ? 'Checking…' : net.service ? 'Running' : 'Not Running'}</strong><p>NetworkManager handles network configuration</p></div></div>${net.service === false ? btn('start-service', 'Start Service') : ''}</section></div>
+    <div class="dash-pair network-pair"><section><h2>${icon('route')} Current Network</h2><dl id="network-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v || '—')}</dd></div>`).join('')}</dl></section>${chartCard()}</div>`;
+    sample(invoke, '*', interval);
+  } else if (page === 'profiles' || page === 'logs') {
+    const p = page === 'profiles';
+    $('view').innerHTML =
+      `<div class="list-toolbar">${!p ? '<strong>Application Logs</strong>' : ''}<input id="query" type="search" aria-label="Search ${page}" value="${esc(query)}" placeholder="Search ${page}…">
+    ${
+      p
+        ? btn('new', 'Create Profile', 'plus', 'primary') +
+          tool('import', 'Import Profiles', 'down') +
+          tool('export-profiles', 'Export Profiles', 'up')
+        : `<select id="level" aria-label="Log level">${options(
+            [
+              ['ALL', 'All'],
+              ['INFO', 'Info'],
+              ['WARN', 'Warning'],
+              ['ERROR', 'Error'],
+            ],
+            level,
+          )}</select>${tool('clear', 'Clear Logs', 'trash')}${tool('export-logs', 'Export Logs', 'up')}`
+    }</div><div id="results"></div>`;
+    filter();
+  } else if (page === 'settings') $('view').innerHTML = settingsPage(lib, interval);
+  else if (page === 'help') $('view').innerHTML = helpPage();
+  else {
+    $('view').innerHTML = scannerPage(page);
+    mountScanner(page);
+  }
+  $('view')
+    .querySelectorAll(
+      '.quick h2,.quick p,.dash-pair h2,#network-facts dt,.service-state p,.service-state strong,.help-topic h2,.list-toolbar strong',
+    )
+    .forEach((e) => (e.dataset.i18n = ''));
+  localize($('view'));
+}
+function logLines() {
+  return lib.logs
+    .filter(
+      (e) =>
+        (level === 'ALL' || e.level === level || (level === 'WARN' && e.level === 'WARNING')) &&
+        `${e.timestamp} ${e.message}`.toLowerCase().includes(query.toLowerCase()),
+    )
+    .map((e) => `[${e.timestamp}] [${e.level}] ${e.message}`)
+    .join('\n');
 }
 function filter() {
-  $('results').innerHTML = page === 'profiles' ? libraryList(library, query) : logs();
+  if ($('results'))
+    $('results').innerHTML =
+      page === 'profiles'
+        ? profileList(lib, query)
+        : `<pre class="log-text">${esc(logLines() || 'No matching log entries.')}</pre>`;
 }
 function navigate(next) {
-  if (!pages[next]) return;
+  if (!Object.hasOwn(pages, next)) return;
   page = localStorage.page = next;
   query = '';
   level = 'ALL';
   render();
   document.querySelector('main').scrollTop = 0;
-  $('page-title').focus({ preventScroll: true });
+  ($('page-title').offsetHeight ? $('page-title') : $('nav').querySelector('[aria-current]')).focus({
+    preventScroll: true,
+  });
 }
-let request = 0;
+async function reload() {
+  lib = await invoke('library_view');
+}
 async function refresh() {
-  const id = ++request;
-  const [network, data] = await Promise.allSettled([invoke('network_snapshot'), invoke('library_view')]);
-  if (id !== request) return;
-  const errors = [];
-  if (network.status === 'fulfilled') {
-    net = network.value;
-    updatedAt = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  } else errors.push(`Network: ${network.reason}`);
-  if (data.status === 'fulfilled') library = data.value;
-  else {
-    library = { profiles: [], locked: false, logs: [] };
-    errors.push(`Library: ${data.reason}`);
-  }
-  loading = false;
-  $('error').textContent = errors.join('\n');
-  $('error').hidden = !errors.length;
-  const focused = document.activeElement?.closest('button');
-  const key = focused?.dataset.do,
-    nav = focused?.dataset.page;
+  const [n, l] = await Promise.allSettled([invoke('network_snapshot'), invoke('library_view')]);
+  const errs = [];
+  if (n.status === 'fulfilled') net = n.value;
+  else errs.push(n.reason);
+  if (l.status === 'fulfilled') lib = l.value;
+  else errs.push(l.reason);
+  $('error').hidden = !errs.length;
+  $('error').textContent = errs.join('\n');
   render();
-  if (!$('dialog').open && (key || nav))
-    [...document.querySelectorAll('button')]
-      .find((b) => (key ? b.dataset.do === key : b.dataset.page === nav))
-      ?.focus({ preventScroll: true });
 }
-function commands() {
+async function done(message) {
+  if (utility) {
+    await changed(utility.kind === 'new' || utility.kind === 'edit');
+    return closeUtility();
+  }
+  await reload();
+  if (dialog.open) dialog.close();
+  render();
+  if (message) notify(message);
+}
+function unlock() {
+  encryptionDialog('unlock');
+}
+function switcher() {
+  if (lib.locked) return unlock();
   modal(
-    'Workspace commands',
-    `<div class="command-list">${Object.entries(pages)
-      .map(
-        ([key, [name, glyph]], i) =>
-          `<button data-page="${key}">${icon(glyph)}${esc(name)}<kbd>Ctrl ${i + 1}</kbd></button>`,
-      )
-      .join('')}
-    ${[
-      ['new', 'plus', 'New profile', 'Ctrl N'],
-      ['sidebar-toggle', 'panel', 'Toggle sidebar', 'Ctrl B'],
-      ['refresh', 'refresh', 'Refresh workspace', 'F5'],
-      ['classic', 'ext', 'Classic tools', '↗'],
-    ]
-      .map(
-        ([action, i, text, k]) => `<button data-do="${action}">${icon(i)}${text}<kbd>${k}</kbd></button>`,
-      )
-      .join('')}</div>`,
+    'Switch Profile',
+    lib.profiles.length
+      ? `<div class="switcher">${lib.profiles.map((p) => `<button data-id="${esc(p.id)}" data-do="apply">${icon('users')}${esc(p.name)}${icon('chevron')}</button>`).join('')}</div>`
+      : empty('users', 'No Profiles Yet', 'Create a profile to switch network settings.') +
+          btn('new', 'Create Profile', 'plus', 'primary'),
   );
 }
-function close() {
-  $('dialog').close();
-}
-async function complete() {
-  close();
-  current = null;
-  await refresh();
-  if (!document.activeElement || document.activeElement === document.body)
-    $('page-title').focus({ preventScroll: true });
-}
-async function action(id) {
-  if (id === 'close') return close();
-  if (id === 'commands') return commands();
-  if (id === 'sidebar-toggle') {
-    if ($('dialog').open) close();
-    localStorage.sidebar = document.documentElement.dataset.sidebar === 'compact' ? 'expanded' : 'compact';
-    syncSidebar();
-    return;
-  }
-  if (id === 'pause-traffic') return togglePause();
-  if (id === 'refresh') {
-    if ($('dialog').open) close();
-    await refresh();
-    if ($('error').hidden) notify('Workspace refreshed.');
-    return;
-  }
-  if (id === 'new' || id === 'edit') {
-    if (library.locked) return unlock();
-    if (id === 'new') current = null;
-    return editor(current, net.adapters, net.primary);
-  }
-  if (id === 'unlock') return unlock();
-  if (id === 'classic') {
+async function apply(p, auto = false, confirmed = false) {
+  selected = p;
+  automatic = auto;
+  const hasAutomation = p.automation && (!auto || lib.settings.auto_switch_allow_scripts);
+  if (!confirmed && (hasAutomation || (p.actions.length && lib.settings.confirm_profile_switch))) {
     modal(
-      'Classic tools',
-      `<p>Open Network Manager’s GTK window for network and port scanning, scheduled switches, watchdog, and the full profile editor.</p><p>After making changes there, refresh this workspace to see them.</p><div class="dialog-foot">${btn('close', 'Cancel')}${btn('launch', 'Open classic app', 'ext', 'primary')}</div>`,
+      `Apply ‘${p.name}’?`,
+      `<p>This will apply ${p.actions.length} actions to your system.</p><ol class="action-list">${p.actions.map((a) => `<li>${esc(a)}</li>`).join('')}</ol>
+    ${hasAutomation ? '<label><input type="checkbox" id="allow-auto"> I reviewed these executable actions and want to run them.</label>' : ''}<div class="dialog-foot">${btn('close', 'Cancel')}<button class="primary" data-do="confirm-apply" ${hasAutomation ? 'disabled' : ''}>Apply</button></div>`,
     );
     return;
   }
-  if (id === 'launch') {
-    await invoke('open_classic');
-    close();
-    return notify('Classic Network Manager opened.');
-  }
-  if (!current) return;
-  if (id === 'remove' || id === 'apply') return confirmAction(id, current);
-  const args = { id: current.id, revision: current.revision };
-  if (id === 'confirm-remove') {
-    await invoke('delete_profile', args);
-    notify('Profile deleted.');
-  } else if (id === 'confirm-apply')
-    notify(await invoke('apply_profile', { ...args, allowAutomation: !!$('allow-auto')?.checked }));
-  else return;
-  await complete();
+  const message = await invoke('apply_profile', {
+    id: p.id,
+    revision: p.revision,
+    allowAutomation: !!$('allow-auto')?.checked,
+    automatic: auto,
+  });
+  await done(message);
 }
-async function run(fn) {
+function diagnostics() {
+  modal(
+    'Network Diagnostics',
+    `<form id="diag-form">${[
+      ['ping', 'Connectivity Test', 'Host to ping', '8.8.8.8', 'Run Ping Test'],
+      ['dns', 'DNS Lookup', 'Domain to lookup', 'example.com', 'Lookup DNS'],
+      ['speed', 'Speed Test', '', '', 'Run Speed Test'],
+    ]
+      .map(
+        ([key, title, label, v, b]) =>
+          `<fieldset><legend>${title}</legend>${label ? `<label for="diag-${key}">${label}</label><input id="diag-${key}" value="${v}">` : '<p>Measure download speed using Cloudflare.</p>'}${btn('diag-' + key, b)}<pre id="out-${key}"></pre></fieldset>`,
+      )
+      .join(
+        '',
+      )}<fieldset><legend>Quick Test Results</legend><p id="quick-tests">Checking connectivity and DNS…</p></fieldset></form>`,
+  );
+  const el = $('quick-tests');
+  Promise.allSettled([
+    invoke('diagnostic', { kind: 'ping', target: '8.8.8.8' }),
+    invoke('diagnostic', { kind: 'dns', target: 'example.com' }),
+  ]).then(
+    (r) =>
+      (el.textContent = `Internet: ${r[0].status === 'fulfilled' ? 'Connected' : 'No response'} · DNS: ${r[1].status === 'fulfilled' ? 'Working' : 'Failed'}`),
+  );
+}
+async function action(act, b) {
+  const row = b?.closest('[data-id]'),
+    p = row ? lib.profiles.find((p) => p.id === row.dataset.id) : selected;
+  if (act.startsWith('scan-'))
+    return scanAction(act, utility?.kind === 'device' ? 'scanner' : page, b, navigate);
+  if (act.startsWith('theme-')) {
+    await invoke('save_setting', { field: 'theme', value: act.slice(6) });
+    await reload();
+    render();
+    return;
+  }
+  if (act.startsWith('diag-')) {
+    const kind = act.slice(5),
+      el = $('out-' + kind);
+    el.textContent = 'Running…';
+    try {
+      el.textContent = await invoke('diagnostic', { kind, target: $('diag-' + kind)?.value || '' });
+    } catch (e) {
+      el.textContent = String(e);
+    }
+    return;
+  }
+  switch (act) {
+    case 'close':
+      if (utility) return closeUtility();
+      dialog.close();
+      return;
+    case 'pause-traffic':
+      return togglePause();
+    case 'sidebar':
+      localStorage.sidebar =
+        document.documentElement.dataset.sidebar === 'compact' ? 'expanded' : 'compact';
+      sidebar();
+      return;
+    case 'minimize':
+      return window.__TAURI__.window.getCurrentWindow().minimize();
+    case 'maximize':
+      return window.__TAURI__.window.getCurrentWindow().toggleMaximize();
+    case 'window-close':
+      return window.__TAURI__.window.getCurrentWindow().close();
+    case 'quit':
+      return invoke('quit_app');
+    case 'refresh':
+      await refresh();
+      return notify('Refreshed.');
+    case 'new':
+      return lib.locked ? unlock() : openWindow('new');
+    case 'edit':
+      return openWindow('edit', p.id);
+    case 'apply':
+      return apply(p);
+    case 'confirm-apply':
+      return apply(selected, automatic, true);
+    case 'switch':
+      return lib.locked ? unlock() : openWindow('switch');
+    case 'remove':
+      selected = p;
+      return modal(
+        'Delete Profile',
+        `<p>Delete <strong>${esc(p.name)}</strong> from this computer?</p>${foot(btn('confirm-remove', 'Delete', null, 'destructive'))}`,
+      );
+    case 'confirm-remove':
+    case 'duplicate':
+      await invoke('profile_operation', {
+        kind: act === 'duplicate' ? 'duplicate' : 'delete',
+        id: p.id,
+        revision: p.revision,
+      });
+      return done(act === 'duplicate' ? 'Profile duplicated.' : 'Profile deleted.');
+    case 'import':
+      if (lib.locked) return unlock();
+      $('import-file').value = '';
+      $('import-file').click();
+      return;
+    case 'import-safe':
+    case 'import-all': {
+      const n = await invoke('import_profiles', {
+        contents: importData,
+        includeScripts: act === 'import-all',
+      });
+      importData = null;
+      return done(`Imported ${n} profiles.`);
+    }
+    case 'export-profiles':
+      if (lib.locked) return unlock();
+      if (!lib.profiles.length) throw Error('No profiles to export.');
+      if (lib.settings.encrypt_profiles)
+        return modal(
+          'Export Profiles',
+          `<p>The exported JSON file will contain unencrypted profiles.</p>${foot(btn('export-plain', 'Export', 'up', 'primary'))}`,
+        );
+    // fall through to the native save dialog
+    case 'export-plain':
+    case 'export-logs': {
+      if (dialog.open) dialog.close();
+      if (
+        await invoke('export_file', {
+          kind: act === 'export-logs' ? 'logs' : 'profiles',
+          contents: act === 'export-logs' ? logLines() : '',
+        })
+      )
+        notify('Export complete.');
+      return;
+    }
+    case 'clear':
+      return modal(
+        'Clear Logs',
+        `<p>Remove the recorded application log?</p>${foot(btn('confirm-clear', 'Clear Logs', null, 'destructive'))}`,
+      );
+    case 'confirm-clear':
+      await invoke('clear_logs');
+      return done('Logs cleared.');
+    case 'start-service':
+      await invoke('diagnostic', { kind: act, target: '' });
+      await refresh();
+      return;
+    case 'copy-network':
+      await copyText(
+        `IP Address: ${net.address || '—'}\nGateway: ${net.gateway || '—'}\nDNS Servers: ${net.dns.join(', ')}\nConnection: ${net.connection || net.primary || 'Disconnected'}`,
+      );
+      return notify('Network info copied to clipboard.');
+    case 'diagnostics':
+      return openWindow('diagnostics');
+    case 'shortcuts':
+      return shortcuts();
+    case 'preferences':
+      return openWindow('preferences');
+    case 'pref-appearance':
+      return preferences(lib);
+    case 'pref-behavior':
+      return preferences(lib, 'behavior');
+    case 'about':
+      return about(lib.version);
+    case 'rules':
+      return openWindow('rules');
+    case 'website':
+    case 'issues':
+    case 'storage':
+    case 'releases':
+      return invoke('open_location', { kind: act });
+    case 'unlock':
+    case 'enable-encryption':
+    case 'change-encryption':
+    case 'disable-encryption':
+      return encryptionDialog(act);
+    case 'schedules':
+    case 'hotkeys':
+      return openWindow(act);
+    case 'entry-add':
+      return addEntry(b.dataset.kind, lib);
+    case 'entry-delete':
+      await changeEntry(b.dataset.kind, lib, b.dataset.id);
+      await changed();
+      await reload();
+      render();
+      return manager(managerKind, lib);
+  }
+}
+const pending = [];
+function drain() {
+  if (busy || dialog.open || !pending.length) return;
+  const [id, auto] = pending.shift(),
+    p = lib.profiles.find((p) => p.id === id);
+  if (p) run(() => apply(p, auto));
+}
+async function run(fn, b) {
   if (busy) return;
   busy = true;
-  const dialog = $('dialog'),
-    wasOpen = dialog.open;
-  const button = document.activeElement?.closest('button');
-  const progress =
-    button &&
-    ({ 'confirm-apply': 'Applying…', 'confirm-remove': 'Deleting…', launch: 'Opening…' }[
-      button.dataset.do
-    ] ||
-      (button.type === 'submit' && button.form
-        ? button.form.id === 'editor'
-          ? 'Saving…'
-          : 'Unlocking…'
-        : ''));
-  const original = button?.textContent;
-  if (progress) {
-    button.textContent = progress;
-    button.disabled = true;
-  }
+  document.body.setAttribute('aria-busy', 'true');
   if ($('dialog-error')) $('dialog-error').hidden = true;
+  if (b) b.disabled = true;
   try {
     await fn();
   } catch (e) {
-    const el = dialog.open ? $('dialog-error') : $('error');
-    el.hidden = false;
-    el.textContent = String(e);
+    if (utility && !dialog.open) modal('Network Manager', '');
+    const dest = dialog.open ? $('dialog-error') : $('error');
+    dest.hidden = false;
+    dest.textContent = String(e);
   } finally {
+    if (b?.isConnected) b.disabled = false;
     busy = false;
-    if (progress && button.isConnected) {
-      button.textContent = original;
-      button.disabled = false;
-      button.focus();
-    }
-    if (wasOpen && !dialog.open) dialog.replaceChildren();
+    document.body.removeAttribute('aria-busy');
+    queueMicrotask(drain);
   }
 }
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
-  if (!b || busy) return;
+  if (!b || busy || b.disabled) return;
+  if (menu.contains(b)) menu.hidePopover?.();
   if (b.dataset.page) {
-    if ($('dialog').open) close();
-    return navigate(b.dataset.page);
-  }
-  if (b.dataset.profile) {
-    current = library.profiles.find((p) => p.id === b.dataset.profile);
-    if (current) detail(current);
+    navigate(b.dataset.page);
     return;
   }
-  run(() => action(b.dataset.do || b.id));
+  if (b.dataset.sort) {
+    run(() => scanAction('scan-sort', page, b, navigate));
+    return;
+  }
+  if (b.dataset.do) run(() => action(b.dataset.do, b), b.dataset.do === 'pause-traffic' ? null : b);
 });
 document.addEventListener('submit', (e) => {
   e.preventDefault();
-  run(() => submitProfile(e, current, invoke, complete));
-});
-$('dialog').addEventListener('cancel', (e) => {
-  if (busy) e.preventDefault();
-});
-$('dialog').addEventListener('close', () => {
-  if (!$('dialog').open) $('dialog').replaceChildren();
+  run(async () => {
+    if (e.target.id === 'profile-editor') {
+      await saveEditor();
+      await done('Profile saved.');
+    } else if (e.target.id === 'entry-form') {
+      const kind = await saveEntry(lib);
+      await changed();
+      await reload();
+      render();
+      manager(kind, lib);
+    } else if (e.target.id === 'encryption-form') {
+      await saveEncryption();
+      await done('Profile library updated.');
+    } else if (e.target.id === 'scan-form') await scanAction('scan-start', page, null, navigate);
+  }, e.submitter);
 });
 document.addEventListener('input', (e) => {
   if (e.target.id === 'query') {
     query = e.target.value;
     filter();
-  }
+  } else if (e.target.id.startsWith('scan-') && e.target.tagName === 'INPUT') scannerInput(e.target);
 });
 document.addEventListener('change', (e) => {
-  if (e.target.id === 'level') {
-    level = e.target.value;
+  const el = e.target;
+  if (el.id === 'allow-auto') dialog.querySelector('[data-do="confirm-apply"]').disabled = !el.checked;
+  else if (el.dataset.setting)
+    run(async () => {
+      try {
+        await updateSetting(el, lib);
+        await changed();
+      } finally {
+        await reload();
+        render();
+        if (dialog.open) preferences(lib, el.dataset.setting === 'theme' ? 'appearance' : 'behavior');
+      }
+    });
+  else if (el.dataset.entryToggle)
+    run(async () => {
+      await changeEntry(el.dataset.entryToggle, lib, el.dataset.id, el.checked);
+      await changed();
+      await reload();
+      render();
+      manager(managerKind, lib);
+    });
+  else if (el.id === 'interval') interval = +(localStorage.interval = el.value);
+  else if (el.id === 'level') {
+    level = el.value;
     filter();
+  } else if (el.id.startsWith('scan-') && el.tagName === 'SELECT') scannerInput(el);
+  else if (el.id === 'import-file' && el.files[0])
+    run(async () => {
+      const file = el.files[0];
+      if (file.size > 16 * 1024 * 1024) throw Error('Backup exceeds 16 MiB.');
+      importData = await file.text();
+      const v = JSON.parse(importData),
+        list = Array.isArray(v) ? v : v.profiles;
+      if (!Array.isArray(list)) throw Error('Invalid profile backup.');
+      if (list.some((p) => p.automation_actions?.length))
+        modal(
+          'Import Warning',
+          `<p>This backup includes executable scripts or programs.</p>${foot(btn('import-safe', 'Import Without Scripts', null, 'primary') + btn('import-all', 'Import With Scripts'))}`,
+        );
+      else await action('import-safe');
+    });
+});
+dialog.addEventListener('cancel', (e) => {
+  if (busy) e.preventDefault();
+});
+dialog.addEventListener('close', () => {
+  if (!dialog.open) {
+    dialog.replaceChildren();
+    delete dialog.dataset.device;
+    importData = null;
+    drain();
   }
-  if (e.target.id === 'theme') {
-    localStorage.theme = e.target.value;
-    theme();
-  }
-  if (e.target.id === 'interval') interval = +(localStorage.interval = e.target.value);
 });
 document.addEventListener('keydown', (e) => {
-  if (busy || $('dialog').open || e.altKey || e.shiftKey) return;
+  if (utility && e.key === 'Escape' && !busy) {
+    e.preventDefault();
+    closeUtility();
+    return;
+  }
+  if (busy || dialog.open || e.repeat) return;
   const k = e.key.toLowerCase(),
     mod = e.ctrlKey || e.metaKey;
-  if (mod && /^[1-5]$/.test(k)) {
+  const hot =
+    lib.settings?.hotkeys_enabled &&
+    lib.settings.hotkeys?.find(
+      (h) =>
+        h.enabled &&
+        h.key.toLowerCase() === k &&
+        [
+          ['Ctrl', e.ctrlKey],
+          ['Alt', e.altKey],
+          ['Shift', e.shiftKey],
+          ['Super', e.metaKey],
+        ].every(([m, on]) => h.modifiers.includes(m) === on),
+    );
+  if (hot) {
+    const p = lib.profiles.find((p) => p.id === hot.profile_id);
+    if (p) {
+      e.preventDefault();
+      run(() => apply(p));
+    }
+    return;
+  }
+  if (mod && !e.altKey && /^[1-7]$/.test(k)) {
     e.preventDefault();
     navigate(Object.keys(pages)[+k - 1]);
     return;
   }
-  if (!(mod && ['k', 'n', 'r', 'f', 'b'].includes(k)) && k !== 'f5') return;
-  if (k === 'f' && !$('query')) return;
-  e.preventDefault();
-  if (k === 'f') return $('query').focus();
-  run(() => action(k === 'k' ? 'commands' : k === 'n' ? 'new' : k === 'b' ? 'sidebar-toggle' : 'refresh'));
+  if (k === 'f10') {
+    e.preventDefault();
+    $('main-menu').click();
+    return;
+  }
+  if (k === 'f1') {
+    e.preventDefault();
+    navigate('help');
+    return;
+  }
+  const a =
+    k === 'f5'
+      ? 'refresh'
+      : mod && !e.altKey
+        ? {
+            n: 'new',
+            p: 'switch',
+            b: 'sidebar',
+            r: 'refresh',
+            d: 'diagnostics',
+            q: 'quit',
+            '?': 'shortcuts',
+            k: 'shortcuts',
+            c: e.shiftKey ? 'copy-network' : null,
+          }[k]
+        : null;
+  if (a) {
+    e.preventDefault();
+    run(() => action(a));
+  } else if (mod && k === 'f' && ($('query') || $('scan-query'))) {
+    e.preventDefault();
+    ($('query') || $('scan-query')).focus();
+  }
 });
+scheme.addEventListener('change', applyTheme);
+narrow.addEventListener('change', sidebar);
 document.addEventListener('visibilitychange', () => {
+  if (utility) return;
   if (document.hidden) stop();
-  else refresh();
+  else if (page === 'dashboard' && !busy && !dialog.open) refresh();
 });
-document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
-syncSidebar();
-render();
-refresh();
+async function boot() {
+  await loadCatalog();
+  document.querySelector('.side-header strong').textContent = tr('Network Manager');
+  if (utility) {
+    document.body.classList.add('utility');
+    [net, lib] = await Promise.all([invoke('network_snapshot'), invoke('library_view')]);
+    applyTheme();
+    switch (utility.kind) {
+      case 'new':
+      case 'edit': {
+        const p = lib.profiles.find((p) => p.id === utility.data);
+        if (utility.kind === 'edit' && !p) throw Error('Profile no longer available.');
+        await editor(p, net);
+        break;
+      }
+      case 'preferences':
+        preferences(lib);
+        break;
+      case 'rules':
+        rules(lib);
+        break;
+      case 'switch':
+        switcher();
+        break;
+      case 'hotkeys':
+      case 'schedules':
+        managerKind = utility.kind;
+        manager(managerKind, lib);
+        break;
+      case 'device':
+        deviceDetails(utility.data);
+        break;
+      case 'diagnostics':
+        diagnostics();
+        break;
+    }
+    return;
+  }
+  $('main-menu').innerHTML = icon('menu');
+  sidebar();
+  render();
+  await window.__TAURI__.event.listen('profile-request', ({ payload }) => {
+    pending.push(payload);
+    drain();
+  });
+  await window.__TAURI__.event.listen('service-message', ({ payload }) => notify(payload));
+  await window.__TAURI__.event.listen('workspace-changed', async ({ payload }) => {
+    await refresh();
+    if (payload) navigate('profiles');
+  });
+  await window.__TAURI__.event.listen('inspect-device', ({ payload }) =>
+    run(() => inspectDevice(payload, navigate)),
+  );
+  await refresh();
+  invoke('detect_range')
+    .then((r) => {
+      scannerDefaults(r, net.gateway);
+      if (['scanner', 'ports'].includes(page) && !document.querySelector('#scan-target:focus')) render();
+    })
+    .catch(() => scannerDefaults(null, net.gateway));
+  if (lib.locked) unlock();
+  invoke('check_update')
+    .then((v) => {
+      if (v) {
+        $('update').hidden = false;
+        $('update').textContent = `v${v} available`;
+      }
+    })
+    .catch(() => {});
+}
+run(boot);
