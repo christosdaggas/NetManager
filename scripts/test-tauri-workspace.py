@@ -79,9 +79,17 @@ def smoke(home):
         def click(selector):
             js("const b=document.querySelector(arguments[0]); if(!b || b.disabled) throw Error(arguments[0]); b.click()", selector)
 
-        wait("document.querySelector('#sample-state') && !document.querySelector('#page-title').textContent.includes('Reading')")
-        wait("!document.querySelector('.connection h2').textContent.includes('Reading')")
+        def toggle_sidebar():
+            element = api(session + "/element", {"using":"css selector", "value":"#sidebar-toggle"})
+            api(session + "/element/" + next(iter(element.values())) + "/click", {})
+
+        wait("document.querySelector('#link-type') && !document.querySelector('#link-type').textContent.includes('Reading')")
         assert not js("return document.querySelector('#error').textContent")
+        if not js("return document.querySelector('#pause-traffic').disabled"):
+            click('#pause-traffic')
+            wait("document.querySelector('#sample-state').textContent === 'Paused'")
+            click('#pause-traffic')
+            wait("document.querySelector('#pause-traffic').dataset.paused === 'false'")
         click('[data-do="new"]')
         js("document.querySelector('#p-name').value = arguments[0]", "Office <test>")
         # Exercise backend validation without depending on host adapter names.
@@ -98,7 +106,7 @@ def smoke(home):
         click('[data-profile]')
         click('[data-do="apply"]')
         click('[data-do="confirm-apply"]')
-        wait("!document.querySelector('dialog').open && document.querySelector('.profile-text').textContent.includes('Last applied')")
+        wait("!document.querySelector('dialog').open && document.querySelector('.profile-list .latest')?.textContent === 'Last applied'")
         assert "connection modify Studio ipv4.dns 1.1.1.1" in (home / "nmcli.log").read_text()
         cache = home / ".local/share/daggas/network-manager/profiles_cache.json"
         saved, = json.loads(cache.read_text())
@@ -110,7 +118,34 @@ def smoke(home):
         assert js("return document.documentElement.dataset.theme") == "dark"
         click('nav [data-page="interfaces"]')
         api(session + "/window/rect", {"width": 550, "height": 550})
-        assert js("return document.documentElement.scrollWidth <= innerWidth")
+        click('nav [data-page="overview"]')
+        wait("document.documentElement.dataset.sidebar === 'compact'")
+        toggle_sidebar()
+        wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'true'")
+        assert js("return document.querySelector('main').scrollWidth <= document.querySelector('main').clientWidth")
+        assert js("""return document.querySelector('.connection').getBoundingClientRect().top >=
+            document.querySelector('.traffic').getBoundingClientRect().bottom""")
+        assert js("return document.querySelector('nav [aria-current=\"page\"]').dataset.page") == 'overview'
+        assert js("""const main=document.querySelector('main'); main.scrollTop=main.scrollHeight;
+            const side=document.querySelector('.sidebar').getBoundingClientRect();
+            const b=document.querySelector('#sidebar-toggle').getBoundingClientRect();
+            return main.scrollTop>0 && side.top===0 && Math.abs(side.height-innerHeight)<1 &&
+                document.elementFromPoint(b.x+b.width/2,b.y+b.height/2).closest('#sidebar-toggle')!==null""")
+        toggle_sidebar()
+        wait("document.querySelector('#sidebar-toggle').getAttribute('aria-label') === 'Expand sidebar'")
+        api(session + "/window/rect", {"width": 1220, "height": 820})
+        api(session + "/refresh", {})
+        wait("document.querySelector('#sidebar-toggle')?.getAttribute('aria-expanded') === 'false'")
+        toggle_sidebar()
+        wait("document.documentElement.dataset.sidebar === 'expanded' && document.querySelector('[data-profile]')")
+        def shortcut():
+            api(session + "/actions", {"actions":[{"type":"key","id":"keyboard","actions":[
+                {"type":"keyDown","value":"\ue009"}, {"type":"keyDown","value":"b"},
+                {"type":"keyUp","value":"b"}, {"type":"keyUp","value":"\ue009"}]}]})
+        shortcut()
+        wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'false'")
+        shortcut()
+        wait("document.querySelector('#sidebar-toggle').getAttribute('aria-expanded') === 'true'")
         click('#commands')
         click('.command-list [data-page="profiles"]')
         click('[data-profile]')
@@ -118,7 +153,7 @@ def smoke(home):
         click('[data-do="confirm-remove"]')
         wait("!document.querySelector('dialog').open && !document.querySelector('[data-profile]')")
         assert json.loads(cache.read_text()) == []
-        print("Native workspace: overview, validation, CRUD, stubbed apply, log, themes, compact layout and command navigation passed.")
+        print("Native workspace: profile workflows, themes, chart controls, full-height sidebar, collapse/expand, saved state and compact layout passed.")
     finally:
         try:
             if session:

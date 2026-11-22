@@ -1,4 +1,8 @@
 const paths = {
+  collapse: 'M3 4h18v16H3zM9 4v16m7-11-3 3 3 3',
+  expand: 'M3 4h18v16H3zM9 4v16m4-11 3 3-3 3',
+  pause: 'M8 5v14M16 5v14',
+  play: 'm7 4 13 8-13 8z',
   panel: 'M3 4h18v16H3zM9 4v16',
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   layers: 'm12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5',

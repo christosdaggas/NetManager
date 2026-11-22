@@ -1,14 +1,9 @@
 import { $, icon, esc, btn, empty, pill, typeName, notify, modal } from './ui.js';
-import { chartCard, sample, stop } from './traffic.js';
+import { chartCard, sample, stop, togglePause } from './traffic.js';
 import { libraryList, detail, editor, confirmAction, unlock, submitProfile } from './profiles.js';
 
 const pages = {
-  overview: [
-    'Overview',
-    'grid',
-    'Network overview',
-    'Your connection, traffic, and saved profiles at a glance.',
-  ],
+  overview: ['Overview', 'grid', 'Overview', ''],
   profiles: [
     'Profiles',
     'layers',
@@ -55,14 +50,27 @@ theme();
 scheme.addEventListener('change', theme);
 const mainAdapter = () => net.adapters.find((a) => a.name === net.primary);
 const host = () => net.host || 'This computer';
+let updatedAt;
+const narrowWindow = matchMedia('(max-width: 860px)');
+function syncSidebar() {
+  const compact = localStorage.sidebar ? localStorage.sidebar === 'compact' : narrowWindow.matches;
+  document.documentElement.dataset.sidebar = compact ? 'compact' : 'expanded';
+  const toggle = $('sidebar-toggle');
+  const label = compact ? 'Expand sidebar' : 'Collapse sidebar';
+  toggle.setAttribute('aria-expanded', String(!compact));
+  toggle.setAttribute('aria-label', label);
+  toggle.title = `${label} (Ctrl B)`;
+  toggle.firstElementChild.innerHTML = icon(compact ? 'expand' : 'collapse');
+  toggle.lastElementChild.textContent = label;
+}
+narrowWindow.addEventListener('change', syncSidebar);
 function drawNav() {
-  $('nav').innerHTML = `<div class="nav-caption">Workspace</div>${Object.entries(pages)
+  $('nav').innerHTML = Object.entries(pages)
     .map(
       ([key, [name, glyph]]) =>
-        `${key === 'settings' ? '<div class="nav-caption second">Application</div>' : ''}<button data-page="${key}" aria-label="${name}" title="${name}" ${key === page ? 'aria-current="page"' : ''}>${icon(glyph)}<span>${name}</span></button>`,
+        `<button data-page="${key}" title="${name}" aria-label="${name}" ${key === page ? 'aria-current="page"' : ''}>${icon(glyph)}<span class="side-label">${name}</span></button>`,
     )
-    .join('')}
-    <button data-do="classic" aria-label="Classic tools" title="Classic tools">${icon('ext')}<span>Classic tools</span></button>`;
+    .join('');
 }
 function interfaces() {
   return `<section class="card"><div class="card-head"><div class="section-title">${icon('port')}<h2>Adapter inventory</h2></div><span class="tag">${net.adapters.length} TOTAL</span></div>
@@ -70,42 +78,45 @@ function interfaces() {
 }
 function overview() {
   const a = mainAdapter();
-  const route = !!net.gateway;
-  const connected = route || !!a?.is_connected;
+  const connected = !!net.gateway || !!a?.is_connected;
   const title = loading
     ? 'Reading connection…'
-    : connected
-      ? a
-        ? `${typeName(a.adapter_type)} connection`
-        : 'Routed connection'
-      : 'No active link';
+    : a
+      ? typeName(a.adapter_type)
+      : net.primary
+        ? 'Network link'
+        : 'Disconnected';
   const facts = [
-    ['monitor', 'Local address', net.address],
-    ['route', 'Gateway', net.gateway],
-    ['server', 'DNS resolver', net.dns[0]],
+    ['IPv4 address', net.address],
+    ['Gateway', net.gateway],
+    ['DNS resolver', net.dns.join(' · ')],
+    ['Link speed', a?.speed_mbps ? `${a.speed_mbps.toLocaleString()} Mb/s` : null],
   ];
-  return `<section class="connection"><div class="hero-art"></div><div class="connection-body"><div class="hero-label"><span class="signal"><b></b><b></b><b></b><b></b></span>CONNECTION STATUS</div>
-    <h2>${title}</h2><div class="hero-meta">${pill(loading ? 'Reading' : connected ? 'Link up' : 'Link down', connected)}<span>${esc(net.primary || 'No interface selected')}</span></div></div>
-    <dl class="hero-facts">${facts.map(([i, t, v]) => `<div><dt>${icon(i)}${t}</dt><dd>${esc(v || '—')}</dd></div>`).join('')}</dl></section>
-    <div class="section-bar"><h2>Workspace pulse</h2><span class="hairline"></span><small>LIVE TELEMETRY</small></div>
-    <div class="split">${chartCard()}<section class="card saved"><div class="card-head"><div class="section-title">${icon('layers')}<h2>Profile library</h2></div><span class="tag">${library.locked ? 'LOCKED' : library.profiles.length + ' SAVED'}</span></div>
-    ${libraryList(library, '', true)}<button class="card-link" data-page="profiles">Manage profiles ${icon('arrow')}</button></section></div>
-    <div class="section-bar"><h2>Local interfaces</h2><span class="hairline"></span><button class="text-btn" data-page="interfaces">Inspect all ${icon('arrow')}</button></div>
-    <div class="adapter-grid">${
+  return `<div class="dashboard">
+    ${chartCard()}
+    <section class="card connection"><div class="card-head"><h2>Connection</h2>${pill(loading ? 'Reading' : connected ? 'Link up' : 'Link down', connected)}</div>
+      <div class="link-identity"><span class="device-icon">${icon(a?.adapter_type === 'wifi' ? 'wifi' : 'port')}</span><div><strong id="link-type">${title}</strong><small id="link-device">${esc(net.primary || 'No active interface')}</small></div></div>
+      <dl class="link-facts">${facts.map(([t, v]) => `<div><dt>${t}</dt><dd>${esc(v || '—')}</dd></div>`).join('')}</dl>
+    </section>
+    <section class="card saved"><div class="card-head"><h2>Saved profiles <span class="count">${library.locked ? icon('lock') : library.profiles.length}</span></h2><button class="jump" data-page="profiles">All profiles ${icon('arrow')}</button></div>
+      ${libraryList(library, '', true)}</section>
+    <section class="card adapters"><div class="card-head"><h2>Interfaces <span class="count">${net.adapters.length}</span></h2><button class="jump" data-page="interfaces">Inspect ${icon('arrow')}</button></div>
+    ${
       net.adapters.length
-        ? net.adapters
-            .slice(0, 4)
+        ? `<ul class="adapter-list">${[...net.adapters]
+            .sort((x, y) => Number(y.is_connected) - Number(x.is_connected))
+            .slice(0, 3)
             .map(
               (a) =>
-                `<div class="adapter"><span class="emblem">${icon(a.adapter_type === 'wifi' ? 'wifi' : 'port')}</span><div><strong>${esc(a.name)}</strong><small>${typeName(a.adapter_type)}</small></div>${pill(a.is_connected ? 'Up' : 'Down', a.is_connected)}</div>`,
+                `<li><span class="adapter-icon">${icon(a.adapter_type === 'wifi' ? 'wifi' : 'port')}</span><div><strong>${esc(a.name)}</strong><small>${typeName(a.adapter_type)}</small></div>${pill(a.is_connected ? 'Up' : 'Down', a.is_connected)}</li>`,
             )
-            .join('')
+            .join('')}</ul>`
         : empty(
             'port',
             loading ? 'Reading adapters…' : 'No physical adapters detected',
-            'Interface status appears here when available.',
+            'Connect an adapter, then refresh.',
           )
-    }</div>`;
+    }</section></div>`;
 }
 function logs() {
   const logs = library.logs.filter(
@@ -126,11 +137,12 @@ function preferences() {
 function render() {
   stop();
   drawNav();
-  const [label, , title, sub] = pages[page];
-  $('host').textContent = host();
-  $('crumb').textContent = label;
+  const [, , title, sub] = pages[page];
   $('page-title').textContent = title;
-  $('subtitle').textContent = sub;
+  if (page === 'overview') {
+    $('subtitle').innerHTML =
+      `${icon('monitor')}<span id="host">${esc(host())}</span><span class="meta-divider" aria-hidden="true"></span><span>${updatedAt ? `Updated ${esc(updatedAt)}` : 'Reading network details…'}</span>`;
+  } else $('subtitle').textContent = sub;
   document.title = `${title} · Network Manager`;
   $('toolbar').innerHTML =
     page === 'settings'
@@ -175,8 +187,10 @@ async function refresh() {
   const [network, data] = await Promise.allSettled([invoke('network_snapshot'), invoke('library_view')]);
   if (id !== request) return;
   const errors = [];
-  if (network.status === 'fulfilled') net = network.value;
-  else errors.push(`Network: ${network.reason}`);
+  if (network.status === 'fulfilled') {
+    net = network.value;
+    updatedAt = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  } else errors.push(`Network: ${network.reason}`);
   if (data.status === 'fulfilled') library = data.value;
   else {
     library = { profiles: [], locked: false, logs: [] };
@@ -205,6 +219,7 @@ function commands() {
       .join('')}
     ${[
       ['new', 'plus', 'New profile', 'Ctrl N'],
+      ['sidebar-toggle', 'panel', 'Toggle sidebar', 'Ctrl B'],
       ['refresh', 'refresh', 'Refresh workspace', 'F5'],
       ['classic', 'ext', 'Classic tools', '↗'],
     ]
@@ -227,6 +242,13 @@ async function complete() {
 async function action(id) {
   if (id === 'close') return close();
   if (id === 'commands') return commands();
+  if (id === 'sidebar-toggle') {
+    if ($('dialog').open) close();
+    localStorage.sidebar = document.documentElement.dataset.sidebar === 'compact' ? 'expanded' : 'compact';
+    syncSidebar();
+    return;
+  }
+  if (id === 'pause-traffic') return togglePause();
   if (id === 'refresh') {
     if ($('dialog').open) close();
     await refresh();
@@ -350,16 +372,17 @@ document.addEventListener('keydown', (e) => {
     navigate(Object.keys(pages)[+k - 1]);
     return;
   }
-  if (!(mod && ['k', 'n', 'r', 'f'].includes(k)) && k !== 'f5') return;
+  if (!(mod && ['k', 'n', 'r', 'f', 'b'].includes(k)) && k !== 'f5') return;
   if (k === 'f' && !$('query')) return;
   e.preventDefault();
   if (k === 'f') return $('query').focus();
-  run(() => action(k === 'k' ? 'commands' : k === 'n' ? 'new' : 'refresh'));
+  run(() => action(k === 'k' ? 'commands' : k === 'n' ? 'new' : k === 'b' ? 'sidebar-toggle' : 'refresh'));
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stop();
   else refresh();
 });
 document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
+syncSidebar();
 render();
 refresh();

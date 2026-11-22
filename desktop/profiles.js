@@ -18,7 +18,7 @@ export function libraryList(library, query = '', compact = false) {
   const visible = compact
     ? [...profiles].sort((a, b) => Number(b === latest) - Number(a === latest)).slice(0, 3)
     : profiles;
-  return `<ul class="profile-list">${visible.map((p) => `<li><button data-profile="${esc(p.id)}">${profileMark()}<span class="profile-text"><strong>${esc(p.name)}</strong><small>${p === latest ? 'Last applied · ' : ''}${esc(p.description || `${p.actions.length} configured action${p.actions.length === 1 ? '' : 's'}`)}</small></span>${icon('chevron')}</button></li>`).join('')}</ul>`;
+  return `<ul class="profile-list">${visible.map((p) => `<li><button data-profile="${esc(p.id)}">${profileMark()}<span class="profile-text"><strong>${esc(p.name)}</strong><small>${esc(p.description || `${p.actions.length} configured action${p.actions.length === 1 ? '' : 's'}`)}</small></span>${p === latest ? '<span class="latest">Last applied</span>' : ''}${icon('chevron')}</button></li>`).join('')}</ul>`;
 }
 
 export function detail(p) {

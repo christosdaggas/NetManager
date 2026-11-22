@@ -10,31 +10,43 @@
   </head>
   <body>
     <a class="skip" href="#page-title">Skip to workspace</a>
-    <aside>
+    <aside class="sidebar" aria-label="Application sidebar">
       <div class="brand">
-        <img src="./mark.svg" alt="" width="38" height="38" />
-        <div>Network Manager<small>CONTROL DESK</small></div>
+        <img src="./mark.svg" alt="" width="32" height="32" />
+        <strong>Network Manager</strong>
       </div>
-      <nav aria-label="Workspace" id="nav"></nav>
-      <div class="station">
-        <span class="station-icon" data-icon="monitor"></span>
-        <div><strong id="host">This computer</strong><small>Local workstation</small></div>
+      <div class="sidebar-scroll">
+        <button
+          id="commands"
+          title="Commands and keyboard shortcuts (Ctrl K)"
+          aria-label="Commands and keyboard shortcuts"
+        >
+          <span data-icon="search"></span><span class="side-label">Commands</span><kbd>Ctrl K</kbd>
+        </button>
+        <nav aria-label="Workspace" id="nav"></nav>
+        <button class="side-action" data-do="classic" title="Classic tools" aria-label="Classic tools">
+          <span data-icon="ext"></span><span class="side-label">Classic tools</span>
+        </button>
       </div>
+      <footer class="sidebar-foot">
+        <button
+          id="sidebar-toggle"
+          class="side-action"
+          type="button"
+          aria-controls="nav"
+          aria-expanded="true"
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar (Ctrl B)"
+        >
+          <span data-icon="collapse"></span><span class="side-label">Collapse sidebar</span>
+        </button>
+      </footer>
     </aside>
     <main>
-      <header>
-        <div class="crumb">
-          <span data-icon="panel"></span>Workspace <span>/</span> <b id="crumb">Overview</b>
-        </div>
-        <button id="commands" title="Commands and keyboard shortcuts">
-          <span data-icon="command"></span><span>Commands</span><kbd>Ctrl K</kbd>
-        </button>
-      </header>
       <div class="page">
-        <div class="eyebrow"><i></i> NETWORK OPERATIONS</div>
         <div class="page-head">
           <div>
-            <h1 id="page-title" tabindex="-1">Network overview</h1>
+            <h1 id="page-title" tabindex="-1">Overview</h1>
             <p id="subtitle"></p>
           </div>
           <div id="toolbar"></div>

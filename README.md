@@ -17,8 +17,10 @@ Made for Fedora with the GNOME desktop (tested on Fedora 44).
 
 ## Tauri desktop workspace (this branch)
 
-The new Linux desktop UI puts the active interface, IPv4 address, gateway,
-resolver, and live receive/transmit rates on one screen. Open **Profiles** to
+The Linux desktop UI opens on a live traffic graph with download and upload
+rates. Use the pause control to inspect a reading. The connection inspector
+shows the active interface, IPv4 address, gateway, resolver, and link speed.
+Use the left sidebar to open **Profiles** and
 create a DHCP or static IPv4 configuration, set DNS, edit a profile, or review
 its actions before applying. **Interfaces** shows link state and hardware
 details; **Activity log** searches the most recent 500 entries.
@@ -44,7 +46,9 @@ app for advanced editing, encryption setup, scanners, and background services
 in the GTK edition. Finish editing in one window before editing in the other;
 use **Refresh** after returning to the workspace.
 
-The workspace remembers window placement, last page, theme, and sampling
+The sidebar fills the window height. Use its bottom-left button or **Ctrl+B**
+to switch between labels and an [icon rail](docs/workspace-compact.webp). The workspace remembers that choice,
+window placement, last page, theme, and sampling
 interval. Traffic history is session-only and sampling stops when Overview is
 not visible. Press **Ctrl+K** for commands, **Ctrl+1–5** to navigate, **Ctrl+N**
 to create a profile, **Ctrl+F** to filter profiles or activity, and **F5** to
