@@ -7,11 +7,7 @@ cd "$PROJECT_DIR"
 
 echo "=== Network Manager AppImage Package ==="
 
-# Ensure release binary exists
-if [[ ! -f "target/release/network-manager" ]]; then
-    echo "Release binary not found, building..."
-    cargo build --release
-fi
+cargo build --release --locked -p network-manager
 
 # Get version from Cargo.toml
 VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
@@ -47,11 +43,6 @@ cp data/icons/hicolor/scalable/apps/com.chrisdaggas.network-manager.svg "$APPDIR
 cp data/icons/hicolor/scalable/apps/com.chrisdaggas.network-manager.svg "$APPDIR/com.chrisdaggas.network-manager.svg"
 if [[ -f "data/icons/hicolor/symbolic/apps/com.chrisdaggas.network-manager-symbolic.svg" ]]; then
     cp data/icons/hicolor/symbolic/apps/com.chrisdaggas.network-manager-symbolic.svg "$APPDIR/usr/share/icons/hicolor/symbolic/apps/"
-fi
-
-# Copy style.css if exists
-if [[ -f "data/style.css" ]]; then
-    cp data/style.css "$APPDIR/usr/share/network-manager/"
 fi
 
 # Create AppRun

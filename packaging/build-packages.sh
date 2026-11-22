@@ -52,7 +52,7 @@ mkdir -p "$RPM_OUT" "$DEB_OUT" "$APPIMAGE_OUT"
 # Build release binary
 echo -e "\n${YELLOW}=== Building Release Binary ===${NC}"
 cd "$PROJECT_ROOT"
-cargo build --release
+cargo build --release --locked
 
 # Verify binary was built
 if [ ! -f "$PROJECT_ROOT/target/release/network-manager" ]; then
@@ -90,7 +90,7 @@ install -Dm755 "$PROJECT_ROOT/target/release/network-manager" "$DEB_PKG_DIR/usr/
 
 # Install compiled translations
 install -d "$DEB_PKG_DIR/usr/share/locale"
-cp -a "$PROJECT_ROOT"/target/locale/. "$DEB_PKG_DIR/usr/share/locale/"
+bash "$PROJECT_ROOT/scripts/install-catalogs.sh" "$DEB_PKG_DIR/usr/share/locale"
 
 # Install data files
 install -Dm644 "$PROJECT_ROOT/data/${APP_ID}.desktop" "$DEB_PKG_DIR/usr/share/applications/${APP_ID}.desktop"
@@ -103,13 +103,13 @@ INSTALLED_SIZE=$(du -s "$DEB_PKG_DIR" | cut -f1)
 
 # Create control file
 cat > "$DEB_PKG_DIR/DEBIAN/control" << EOF
-Package: network-manager
+Package: cd-network-manager
 Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: ${DEB_ARCH}
 Installed-Size: ${INSTALLED_SIZE}
-Depends: libgtk-4-1, libadwaita-1-0, network-manager
+Depends: libwebkit2gtk-4.1-0, network-manager, iproute2
 Recommends: bubblewrap
 Maintainer: Christos A. Daggas <info@chrisdaggas.com>
 Homepage: https://chrisdaggas.com
@@ -179,7 +179,7 @@ mkdir -p "$APPDIR/usr/share/locale"
 install -Dm755 "$PROJECT_ROOT/target/release/network-manager" "$APPDIR/usr/bin/network-manager"
 
 # Install compiled translations
-cp -a "$PROJECT_ROOT"/target/locale/. "$APPDIR/usr/share/locale/"
+bash "$PROJECT_ROOT/scripts/install-catalogs.sh" "$APPDIR/usr/share/locale"
 
 # Install desktop and metainfo
 install -Dm644 "$PROJECT_ROOT/data/${APP_ID}.desktop" "$APPDIR/${APP_ID}.desktop"

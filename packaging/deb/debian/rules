@@ -30,7 +30,7 @@ override_dh_auto_install:
 
 	# Install compiled gettext catalogs
 	install -d debian/cd-network-manager/usr/share/locale
-	cp -a target/locale/. debian/cd-network-manager/usr/share/locale/
+	bash scripts/install-catalogs.sh debian/cd-network-manager/usr/share/locale
 
 override_dh_auto_test:
 	cargo test --release

@@ -39,12 +39,13 @@ echo "Required commands:"
 check_command cargo rust || ((ERRORS++))
 check_command rustc rust || ((ERRORS++))
 check_command pkg-config pkg-config || ((ERRORS++))
-check_command glib-compile-resources glib2-devel || ((ERRORS++))
+check_command python3 python3 || ((++ERRORS))
+check_command msgfmt gettext || ((++ERRORS))
 
 echo ""
 echo "Required libraries:"
-check_lib gtk4 gtk4-devel || ((ERRORS++))
-check_lib libadwaita-1 libadwaita-devel || ((ERRORS++))
+check_lib gtk+-3.0 gtk3-devel || ((++ERRORS))
+check_lib webkit2gtk-4.1 webkit2gtk4.1-devel || ((++ERRORS))
 
 echo ""
 echo "Optional (for packaging):"

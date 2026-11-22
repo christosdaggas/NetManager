@@ -19,7 +19,7 @@ script:
   - cp ../../data/icons/hicolor/scalable/apps/com.chrisdaggas.network-manager.svg AppDir/usr/share/icons/hicolor/scalable/apps/
   - cp ../../data/icons/hicolor/symbolic/apps/com.chrisdaggas.network-manager-symbolic.svg AppDir/usr/share/icons/hicolor/symbolic/apps/
   - mkdir -p AppDir/usr/share/locale
-  - cp -a ../../target/locale/. AppDir/usr/share/locale/
+  - bash ../../scripts/install-catalogs.sh AppDir/usr/share/locale
 
 AppDir:
   path: ./AppDir
@@ -28,7 +28,7 @@ AppDir:
     id: com.chrisdaggas.network-manager
     name: Network Manager
     icon: com.chrisdaggas.network-manager
-    version: 1.0.0
+    version: 1.1.0
     exec: usr/bin/network-manager
     exec_args: $@
 
@@ -40,8 +40,7 @@ AppDir:
       - sourceline: 'deb http://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse'
 
     include:
-      - libgtk-4-1
-      - libadwaita-1-0
+      - libwebkit2gtk-4.1-0
       - libglib2.0-0
       - libgio2.0-cil
       - libpango-1.0-0
@@ -71,7 +70,6 @@ AppDir:
   runtime:
     env:
       # GTK settings
-      GTK_THEME: Adwaita
       GDK_BACKEND: wayland,x11
       # Ensure proper icon loading
       XDG_DATA_DIRS: '${APPDIR}/usr/share:${XDG_DATA_DIRS}'

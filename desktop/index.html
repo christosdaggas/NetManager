@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Dashboard · Network Manager</title>
+    <link rel="icon" href="./mark.svg" />
+    <link rel="stylesheet" href="./adwaita.css" />
+    <script type="module" src="./workspace.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#page-title">Skip to content</a>
+    <aside class="sidebar" aria-label="Application sidebar">
+      <div class="side-header" data-tauri-drag-region>
+        <img class="app-badge" src="./mark.svg" alt="" width="30" height="30" draggable="false" />
+        <strong data-tauri-drag-region>Network Manager</strong
+        ><button id="sidebar-toggle" data-do="sidebar" aria-controls="nav" aria-expanded="true"></button>
+      </div>
+      <nav id="nav" aria-label="Workspace"></nav>
+      <div class="side-footer"><button id="shortcut-guide" data-do="shortcuts"></button></div>
+    </aside>
+    <div class="content-shell">
+      <header class="content-header" data-tauri-drag-region>
+        <div class="location" data-tauri-drag-region>
+          <span id="location-root" data-tauri-drag-region></span><span aria-hidden="true">/</span
+          ><strong id="heading" data-tauri-drag-region></strong>
+        </div>
+        <button
+          id="main-menu"
+          class="icon-btn"
+          title="Main Menu"
+          aria-label="Main Menu"
+          popovertarget="menu"
+        >
+          ☰
+        </button>
+        <div id="menu" popover="auto" aria-label="Main Menu"></div>
+        <div class="window-controls">
+          <button data-do="minimize" aria-label="Minimize" title="Minimize">−</button
+          ><button data-do="maximize" aria-label="Maximize or restore" title="Maximize or restore">□</button
+          ><button data-do="window-close" aria-label="Close window" title="Close window">×</button>
+        </div>
+      </header>
+      <main>
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h1 id="page-title" tabindex="-1"></h1>
+              <p id="subtitle"></p>
+            </div>
+            <div id="toolbar"></div>
+          </div>
+          <p id="error" role="alert" hidden></p>
+          <div id="view"></div>
+        </div>
+      </main>
+      <footer class="status-bar">
+        <button hidden data-do="releases" id="update"></button><span id="version"></span>
+      </footer>
+    </div>
+    <input type="file" id="import-file" accept=".json,application/json" hidden />
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div id="notice" role="status"></div>
+  </body>
+</html>

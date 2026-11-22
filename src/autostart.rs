@@ -31,6 +31,10 @@ pub fn is_autostart_enabled() -> bool {
 
 /// Enable autostart by creating the .desktop file.
 pub fn enable_autostart() -> Result<(), String> {
+    enable_autostart_for("network-manager")
+}
+
+pub fn enable_autostart_for(binary: &str) -> Result<(), String> {
     let dir = autostart_dir().ok_or("Could not determine autostart directory")?;
     let path = autostart_file_path().ok_or("Could not determine autostart file path")?;
 
@@ -44,7 +48,7 @@ pub fn enable_autostart() -> Result<(), String> {
         r#"[Desktop Entry]
 Name={}
 Comment=Manage network and system profiles
-Exec=network-manager --minimized
+Exec={} --minimized
 Icon={}
 Terminal=false
 Type=Application
@@ -53,7 +57,7 @@ X-GNOME-Autostart-enabled=true
 X-GNOME-Autostart-Delay=5
 NoDisplay=false
 "#,
-        APP_NAME, APP_ID
+        APP_NAME, binary, APP_ID
     );
 
     let mut file = fs::File::create(&path)

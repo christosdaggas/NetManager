@@ -5,7 +5,7 @@
 %global app_id com.chrisdaggas.network-manager
 
 Name:           network-manager
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Network and system profile manager for GNOME
 
@@ -16,17 +16,19 @@ Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  %{rust_arches}
 
 BuildRequires:  cargo
-BuildRequires:  rust >= 1.75
-BuildRequires:  pkgconfig(gtk4) >= 4.14
-BuildRequires:  pkgconfig(libadwaita-1) >= 1.6
-BuildRequires:  pkgconfig(glib-2.0) >= 2.76
+BuildRequires:  rust
+BuildRequires:  gcc-c++
+BuildRequires:  python3
+BuildRequires:  gettext
+BuildRequires:  pkgconfig(gtk+-3.0)
+BuildRequires:  pkgconfig(webkit2gtk-4.1)
+BuildRequires:  pkgconfig(openssl)
 BuildRequires:  gettext-devel
 BuildRequires:  desktop-file-utils
 BuildRequires:  appstream
 
-Requires:       gtk4%{?_isa} >= 4.14
-Requires:       libadwaita%{?_isa} >= 1.6
 Requires:       NetworkManager
+Requires:       iproute
 Requires:       polkit
 Requires:       hicolor-icon-theme
 Recommends:     bubblewrap
@@ -45,10 +47,10 @@ Made for Fedora with the GNOME desktop.
 %autosetup
 
 %build
-cargo build --release --locked
+cargo build --release --locked -p network-manager
 
 %install
-install -Dpm 0755 target/release/network-manager \
+install -Dpm 0755 "${CARGO_TARGET_DIR:-target}/release/network-manager" \
     %{buildroot}%{_bindir}/network-manager
 install -Dpm 0644 data/%{app_id}.desktop \
     %{buildroot}%{_datadir}/applications/%{app_id}.desktop
@@ -58,13 +60,13 @@ install -Dpm 0644 data/icons/hicolor/scalable/apps/%{app_id}.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/%{app_id}.svg
 install -Dpm 0644 data/icons/hicolor/symbolic/apps/%{app_id}-symbolic.svg \
     %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/%{app_id}-symbolic.svg
-install -d %{buildroot}%{_datadir}/locale
-cp -a target/locale/. %{buildroot}%{_datadir}/locale/
+bash scripts/install-catalogs.sh %{buildroot}%{_datadir}/locale
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/%{app_id}.desktop
 appstreamcli validate --no-net %{buildroot}%{_metainfodir}/%{app_id}.metainfo.xml
-cargo test --release --locked
+cargo test --release --locked -p netmanager-core
+test "$(%{buildroot}%{_bindir}/network-manager --version)" = "Network Manager %{version}"
 
 %files
 %license LICENSE
@@ -77,5 +79,8 @@ cargo test --release --locked
 %{_datadir}/locale/*/LC_MESSAGES/network-manager.mo
 
 %changelog
+* Mon Nov 23 2026 Christos A. Daggas <info@chrisdaggas.com> - 1.1.0-1
+- Replace the GTK4 interface with the Tauri desktop and retain the existing launcher and profile library.
+
 * Thu Oct 22 2026 Christos A. Daggas <info@chrisdaggas.com> - 1.0.0-1
 - First release, made for Fedora with the GNOME desktop
